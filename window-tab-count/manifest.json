@@ -1,7 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Have badge show the current number of tabs in the window.",
+  "name": "Window Tab Count",
+  "description": "Have badge show the current number of tabs in the window.",
   "version": "1.0",
+  "action": {},
   "background": {
     "service_worker": "background.js"
   },

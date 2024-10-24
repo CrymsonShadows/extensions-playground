@@ -1,15 +1,21 @@
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   chrome.action.setBadgeText({
-    text: "0",
+    text: await getNumTabs(),
   });
 });
 
-const queryOptions = { windowId: windows.WINDOW_ID_CURRENT };
+const queryOptions = { windowId: chrome.windows.WINDOW_ID_CURRENT };
 
 async function getNumTabs() {
   const tabs = await chrome.tabs.query(queryOptions);
-  return tabs.length;
+  return tabs.length.toString();
 }
+
+chrome.windows.onFocusChanged.addListener(async () => {
+  chrome.action.setBadgeText({
+    text: await getNumTabs(),
+  });
+});
 
 chrome.tabs.onCreated.addListener(async () => {
   chrome.action.setBadgeText({
