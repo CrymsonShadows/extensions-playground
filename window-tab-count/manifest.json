@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Group tabs into based on their domains",
+  "name": "Have badge show the current number of tabs in the window.",
   "version": "1.0",
   "background": {
     "service_worker": "background.js"
