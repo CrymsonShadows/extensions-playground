@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Window Reload Tabs",
+  "description": "Have badge reload the tabs in the current window.",
+  "version": "1.0",
+  "action": {},
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs"]
+}
