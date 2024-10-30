@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Group tabs into based on their domains",
+  "name": "Domain Tab Group",
+  "description": "Group tabs based on their domains",
   "version": "1.0",
   "action": {
     "default_popup": "popup.html"
   },
-  "permissions": ["tabGroups"]
+  "permissions": ["tabs", "tabGroups"]
 }
