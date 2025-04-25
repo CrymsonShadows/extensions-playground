@@ -215,7 +215,6 @@ h3 {
 }
 .bookmark-folder:not(.has-children) > .folder-details::before {
   content: ""; /* No icon if no children */
-  /* Alternatively, use a different symbol like a dot: content: '•'; color: #ccc; */
 }
 
 /* Styling for the folder name */
@@ -266,12 +265,13 @@ h3 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.deselect-btn {
-  background-color: #f0ad4e;
+/* Updated selector and style for the new button */
+.delete-btn {
+  background-color: #d9534f; /* Red */
   color: white;
 }
-.deselect-btn:hover {
-  background-color: #ec971f;
+.delete-btn:hover {
+  background-color: #c9302c; /* Darker red */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
