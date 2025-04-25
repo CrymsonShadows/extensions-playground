@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Sidebar Tab Manager",
+  "name": "Sidebar Tab Manager/Bookmarker",
   "version": "1.0",
   "description": "Lists tabs in the sidebar, allows closing and bookmarking selected tabs.",
   "permissions": ["tabs", "bookmarks", "sidePanel", "favicon"],
@@ -15,7 +15,6 @@
   },
   "icons": {
     "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   }
 }
