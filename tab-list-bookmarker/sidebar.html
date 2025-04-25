@@ -8,29 +8,50 @@
 </head>
 <body>
     <div class="container">
-        <div class="actions">
-            <h3>Bookmark Selected Tabs</h3>
 
-            <label for="new-folder-name">New Folder Name:</label>
-            <input type="text" id="new-folder-name" placeholder="Optional: leave blank to add to selected folder" class="input-field">
-
-            <label>Place New Folder Inside:</label>
-            <div id="selected-folder-display" class="selected-folder-display">
-                Select a folder below...
-            </div>
-            <div id="bookmark-tree-container" class="bookmark-tree-container">
-                <p>Loading folders...</p>
-            </div>
-            <input type="hidden" id="selected-folder-id">
-
-            <div class="button-group">
-                 <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
-                 <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
+        <div class="action-tabs-container">
+            <div class="tab-buttons">
+                <button class="tab-btn active" data-target="bookmark-settings">Bookmark</button>
+                <button class="tab-btn" data-target="group-settings">Group Tabs</button>
             </div>
 
-            <p id="status-message" class="status-message"></p>
+            <div class="tab-content">
+                <div id="bookmark-settings" class="tab-panel active">
+                    <h3>Bookmark Selected Tabs</h3>
+                    <label for="new-folder-name">New Folder Name:</label>
+                    <input type="text" id="new-folder-name" placeholder="Optional: leave blank to add to selected folder" class="input-field">
+                    <label>Place New Folder Inside:</label>
+                    <div id="selected-folder-display" class="selected-folder-display">Select a folder below...</div>
+                    <div id="bookmark-tree-container" class="bookmark-tree-container">
+                        <p>Loading folders...</p>
+                    </div>
+                    <input type="hidden" id="selected-folder-id">
+                    <div class="button-group">
+                         <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
+                         <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
+                    </div>
+                    <p id="status-message" class="status-message"></p>
+                </div>
+
+                <div id="group-settings" class="tab-panel">
+                     <h3>Move Selected Tabs to Group</h3>
+                     <label for="target-group-select">Target Group:</label>
+                     <select id="target-group-select" class="input-field">
+                         <option value="">Loading groups...</option>
+                         </select>
+
+                     <div id="new-group-options" class="new-group-options hidden">
+                          <label for="new-group-name">New Group Name:</label>
+                          <input type="text" id="new-group-name" placeholder="Optional group name" class="input-field">
+                          <label for="new-group-color">New Group Color:</label>
+                          <select id="new-group-color" class="input-field">
+                             </select>
+                     </div>
+
+                     <button id="move-to-group-btn" class="btn group-btn">Move to Group</button>
+                     <p id="group-status-message" class="status-message"></p> </div>
+            </div>
         </div>
-
         <div class="tabs-header">
              <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
              <div class="select-all-container">

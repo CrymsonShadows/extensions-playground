@@ -1,5 +1,6 @@
 // sidebar.js
 
+// Existing element references...
 const tabListElement = document.getElementById("tab-list");
 const bookmarkSelectedBtn = document.getElementById("bookmark-selected-btn");
 const newFolderNameInput = document.getElementById("new-folder-name");
@@ -14,8 +15,20 @@ const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
 const statusMessageElement = document.getElementById("status-message");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const selectedCountSpan = document.getElementById("selected-count");
+const targetGroupSelect = document.getElementById("target-group-select");
+const newGroupOptionsDiv = document.getElementById("new-group-options");
+const newGroupNameInput = document.getElementById("new-group-name");
+const newGroupColorSelect = document.getElementById("new-group-color");
+const moveToGroupBtn = document.getElementById("move-to-group-btn");
+const groupStatusMessageElement = document.getElementById(
+  "group-status-message"
+);
 
-// Map Chrome group colors to CSS-friendly values (Hex)
+// --- NEW: Action Tab Elements ---
+const tabButtons = document.querySelectorAll(".tab-btn");
+const tabPanels = document.querySelectorAll(".tab-panel");
+
+// Color maps and constants (Same as before)
 const groupColorMap = {
   grey: "#DADCE0",
   blue: "#89B4F8",
@@ -27,40 +40,51 @@ const groupColorMap = {
   cyan: "#78D9EC",
   orange: "#FCAD70",
 };
-
-// NEW: Map group colors to lighter background shades for tab items
 const groupBackgroundColorMap = {
-  grey: "#F1F3F4", // Lighter grey
-  blue: "#E8F0FE", // Lighter blue
-  red: "#FCE8E6", // Lighter red
-  yellow: "#FEF7E0", // Lighter yellow
-  green: "#E6F4EA", // Lighter green
-  pink: "#FCE8F4", // Lighter pink
-  purple: "#F3E8FD", // Lighter purple
-  cyan: "#E0FCFF", // Lighter cyan
-  orange: "#FEEFDC", // Lighter orange
+  grey: "#F1F3F4",
+  blue: "#E8F0FE",
+  red: "#FCE8E6",
+  yellow: "#FEF7E0",
+  green: "#E6F4EA",
+  pink: "#FCE8F4",
+  purple: "#F3E8FD",
+  cyan: "#E0FCFF",
+  orange: "#FEEFDC",
 };
+const availableGroupColors = Object.keys(groupColorMap);
 
-// --- Tab Loading and Display ---
+// --- Action Tab Switching Logic ---
+function handleTabClick(event) {
+  const clickedButton = event.currentTarget;
+  const targetPanelId = clickedButton.dataset.target;
 
-// Helper function to create a single tab item element
-// UPDATED: Accepts groupColorName ('blue', 'red', etc.)
+  // Remove active class from all buttons and panels
+  tabButtons.forEach((btn) => btn.classList.remove("active"));
+  tabPanels.forEach((panel) => panel.classList.remove("active"));
+
+  // Add active class to the clicked button and corresponding panel
+  clickedButton.classList.add("active");
+  const targetPanel = document.getElementById(targetPanelId);
+  if (targetPanel) {
+    targetPanel.classList.add("active");
+  } else {
+    console.error("Target panel not found:", targetPanelId);
+  }
+}
+
+// --- Tab Loading and Display --- (Code remains the same)
 function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
   listItem.dataset.tabId = tab.id;
   listItem.dataset.groupId = tab.groupId;
-
-  // Apply background color if in a group with a known color
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
-    // Add a border in the original group color for visual connection
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
-    // Adjust padding slightly to account for the border
-    listItem.style.paddingLeft = isInGroup ? "21px" : "15px"; // Original was 25px/15px
+    listItem.style.paddingLeft = "21px";
+  } else {
+    listItem.style.paddingLeft = "15px";
   }
-
-  // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.dataset.tabId = tab.id;
@@ -69,8 +93,6 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   checkbox.dataset.tabTitle = tab.title;
   checkbox.addEventListener("change", updateSelectAllCheckboxState);
   listItem.appendChild(checkbox);
-
-  // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
   favicon.src = tab.favIconUrl || "icons/default_favicon.png";
@@ -79,15 +101,11 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
-
-  // Title
   const title = document.createElement("span");
   title.className = "tab-title";
   title.textContent = tab.title || tab.url;
   title.title = tab.title || tab.url;
   listItem.appendChild(title);
-
-  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
   closeButton.innerHTML = "&times;";
@@ -97,35 +115,26 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
-
   return listItem;
 }
-
-// Function to render the list of tabs, now including groups
-// UPDATED: Passes group color to createTabItemElement
 async function renderTabs() {
   try {
     const [tabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
     ]);
-
     tabListElement.innerHTML = "";
-
     if (tabs.length === 0) {
-      tabListElement.innerHTML = "<p>No tabs found in this window.</p>";
+      tabListElement.innerHTML = "<p>No tabs found.</p>";
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
       updateSelectAllCheckboxState();
       return;
     }
-
     selectAllCheckbox.disabled = false;
-
     const groupMap = new Map(groups.map((group) => [group.id, group]));
     const tabsByGroup = new Map();
     const ungroupedTabs = [];
-
     tabs.forEach((tab) => {
       if (
         tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE &&
@@ -139,24 +148,17 @@ async function renderTabs() {
         ungroupedTabs.push(tab);
       }
     });
-
-    // Render groups first
     groups.forEach((group) => {
       const groupTabs = tabsByGroup.get(group.id);
       if (!groupTabs || groupTabs.length === 0) return;
-
-      // Create Group Header
       const header = document.createElement("div");
       header.className = "tab-group-header";
       header.dataset.groupId = group.id;
-      // Style header background slightly darker than tabs
       header.style.backgroundColor =
         groupBackgroundColorMap[group.color] || "#F1F3F4";
       header.style.borderBottom = `1px solid ${
         groupColorMap[group.color] || "#DADCE0"
       }`;
-
-      // Group Checkbox
       const groupCheckbox = document.createElement("input");
       groupCheckbox.type = "checkbox";
       groupCheckbox.title = `Select/Deselect Group: ${
@@ -166,44 +168,31 @@ async function renderTabs() {
       groupCheckbox.className = "group-checkbox";
       groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
       header.appendChild(groupCheckbox);
-
-      // Color Indicator (using original group color)
       const colorIndicator = document.createElement("span");
       colorIndicator.className = "group-color-indicator";
       colorIndicator.style.backgroundColor =
         groupColorMap[group.color] || "#DADCE0";
       header.appendChild(colorIndicator);
-
-      // Group Title
       const groupTitle = document.createElement("span");
       groupTitle.className = "group-title";
       groupTitle.textContent = group.title || "Unnamed Group";
       header.appendChild(groupTitle);
-
       tabListElement.appendChild(header);
-
-      // Render Tabs within the group, passing the color name
       groupTabs.forEach((tab) => {
-        // Pass the group color name (e.g., 'blue')
         tabListElement.appendChild(
           createTabItemElement(tab, true, group.color)
         );
       });
     });
-
-    // Render Ungrouped Tabs
     if (ungroupedTabs.length > 0) {
       ungroupedTabs.forEach((tab) => {
-        // Pass false for isInGroup and null for color
         tabListElement.appendChild(createTabItemElement(tab, false, null));
       });
     }
-
     updateSelectAllCheckboxState();
   } catch (error) {
     console.error("Error loading tabs/groups:", error);
-    tabListElement.innerHTML =
-      "<p>Error loading tabs. See console for details.</p>";
+    tabListElement.innerHTML = "<p>Error loading tabs.</p>";
     selectAllCheckbox.checked = false;
     selectAllCheckbox.disabled = true;
     selectedCountSpan.textContent = "(0)";
@@ -213,9 +202,7 @@ async function renderTabs() {
   }
 }
 
-// --- Tab Actions ---
-
-// Function to close a specific tab (Same as before)
+// --- Tab Actions --- (Code remains the same)
 async function closeTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
@@ -234,8 +221,6 @@ async function closeTab(tabId) {
     }
   }
 }
-
-// Function to get selected tabs (Same as before)
 function getSelectedTabs() {
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
@@ -256,9 +241,7 @@ function getSelectedTabs() {
   return selectedTabs;
 }
 
-// --- Checkbox State Management ---
-
-// Listener for group checkboxes (Same as before)
+// --- Checkbox State Management --- (Code remains the same)
 function handleGroupCheckboxChange(event) {
   const groupCheckbox = event.target;
   const groupId = groupCheckbox.dataset.groupId;
@@ -271,8 +254,6 @@ function handleGroupCheckboxChange(event) {
   });
   updateSelectAllCheckboxState();
 }
-
-// Function to handle the main "Select All" checkbox click (Same as before)
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
@@ -288,8 +269,6 @@ function handleSelectAllChange() {
   });
   updateSelectAllCheckboxState();
 }
-
-// Function to update the state of ALL checkboxes (Main, Groups, Counts) (Same as before)
 function updateSelectAllCheckboxState() {
   const allTabCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
@@ -367,8 +346,6 @@ function updateSelectAllCheckboxState() {
     }
   }
 }
-
-// Function to deselect all checkboxes (Same as before)
 function deselectAllCheckboxes() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
@@ -382,9 +359,7 @@ function deselectAllCheckboxes() {
   updateSelectAllCheckboxState();
 }
 
-// --- Bookmarking ---
-
-// Function to build a single level of the bookmark tree recursively (Same as before)
+// --- Bookmarking --- (Code remains the same)
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
     if (!node.url) {
@@ -428,8 +403,6 @@ function buildBookmarkTreeLevel(nodes, parentElement) {
     }
   });
 }
-
-// Function to render the entire bookmark tree (Same as before)
 async function renderBookmarkTree() {
   try {
     const bookmarkTree = await chrome.bookmarks.getTree();
@@ -458,8 +431,6 @@ async function renderBookmarkTree() {
     }
   }
 }
-
-// Helper function to create bookmarks (Same as before)
 async function createBookmarksInFolder(tabs, targetFolderId) {
   const successfullyBookmarkedTabs = [];
   let createdCount = 0;
@@ -496,8 +467,6 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
   );
   return successfullyBookmarkedTabs;
 }
-
-// Main function to handle bookmarking (Same as before)
 async function performBookmarkOperation(
   selectedTabs,
   newFolderName,
@@ -573,10 +542,6 @@ async function performBookmarkOperation(
     return { success: false, bookmarkedTabs: [] };
   }
 }
-
-// --- Button Action Functions ---
-
-// Function for the "Bookmark Selected" button (Same as before)
 async function handleBookmarkSelectedClick() {
   const selectedTabs = getSelectedTabs();
   const newFolderName = newFolderNameInput.value.trim();
@@ -601,8 +566,6 @@ async function handleBookmarkSelectedClick() {
     parentFolderName
   );
 }
-
-// Function for the "Bookmark & Delete" button (Same as before)
 async function handleBookmarkAndDeleteClick() {
   const selectedTabs = getSelectedTabs();
   const newFolderName = newFolderNameInput.value.trim();
@@ -653,9 +616,137 @@ async function handleBookmarkAndDeleteClick() {
   }
 }
 
-// --- Utility Functions ---
+// --- Tab Grouping Logic --- (Code remains the same)
+async function loadExistingGroups() {
+  try {
+    const groups = await chrome.tabGroups.query({
+      windowId: chrome.windows.WINDOW_ID_CURRENT,
+    });
+    targetGroupSelect.innerHTML = "";
+    const newGroupOption = document.createElement("option");
+    newGroupOption.value = "new";
+    newGroupOption.textContent = "Create New Group...";
+    targetGroupSelect.appendChild(newGroupOption);
+    groups.forEach((group) => {
+      const option = document.createElement("option");
+      option.value = group.id;
+      const colorIndicator = `<span class="group-color-indicator" style="background-color: ${
+        groupColorMap[group.color] || "#DADCE0"
+      }; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle;"></span>`;
+      option.innerHTML = colorIndicator + (group.title || `Group ${group.id}`);
+      targetGroupSelect.appendChild(option);
+    });
+    handleTargetGroupChange();
+  } catch (error) {
+    console.error("Error loading tab groups:", error);
+    targetGroupSelect.innerHTML =
+      '<option value="">Error loading groups</option>';
+    setGroupStatusMessage("Could not load groups.", true);
+    if (chrome.runtime.lastError) {
+      console.error("Chrome runtime error:", chrome.runtime.lastError.message);
+    }
+  }
+}
+function populateNewGroupColors() {
+  newGroupColorSelect.innerHTML = "";
+  availableGroupColors.forEach((colorName) => {
+    const option = document.createElement("option");
+    option.value = colorName;
+    option.textContent = colorName.charAt(0).toUpperCase() + colorName.slice(1);
+    option.style.backgroundColor =
+      groupBackgroundColorMap[colorName] || "#F1F3F4";
+    newGroupColorSelect.appendChild(option);
+  });
+  newGroupColorSelect.value = "grey";
+}
+function handleTargetGroupChange() {
+  if (targetGroupSelect.value === "new") {
+    newGroupOptionsDiv.classList.remove("hidden");
+  } else {
+    newGroupOptionsDiv.classList.add("hidden");
+  }
+}
+async function handleMoveToGroupClick() {
+  const selectedTabs = getSelectedTabs();
+  const targetGroupIdOrNew = targetGroupSelect.value;
+  if (selectedTabs.length === 0) {
+    setGroupStatusMessage("No tabs selected to move.", true);
+    return;
+  }
+  if (!targetGroupIdOrNew) {
+    setGroupStatusMessage(
+      "Please select a target group or 'Create New'.",
+      true
+    );
+    return;
+  }
+  const tabIdsToMove = selectedTabs.map((tab) => tab.id);
+  setGroupStatusMessage("Moving tabs...");
+  try {
+    if (targetGroupIdOrNew === "new") {
+      const createProperties = {};
+      const newName = newGroupNameInput.value.trim();
+      const newColor = newGroupColorSelect.value;
+      if (newName) {
+        createProperties.title = newName;
+      }
+      createProperties.color = newColor;
+      console.log(
+        "Creating new group with properties:",
+        createProperties,
+        "for tabs:",
+        tabIdsToMove
+      );
+      const newGroupId = await chrome.tabs.group({
+        tabIds: tabIdsToMove,
+        createProperties: createProperties,
+      });
+      console.log("Created new group with ID:", newGroupId);
+      setGroupStatusMessage(
+        `Moved ${tabIdsToMove.length} tab(s) to new group ${
+          newName || `(ID: ${newGroupId})`
+        }.`
+      );
+      newGroupNameInput.value = "";
+    } else {
+      const targetGroupId = parseInt(targetGroupIdOrNew, 10);
+      if (isNaN(targetGroupId)) {
+        setGroupStatusMessage("Invalid target group selected.", true);
+        return;
+      }
+      console.log(
+        `Moving tabs ${tabIdsToMove} to existing group ID: ${targetGroupId}`
+      );
+      await chrome.tabs.group({ tabIds: tabIdsToMove, groupId: targetGroupId });
+      try {
+        const groupInfo = await chrome.tabGroups.get(targetGroupId);
+        setGroupStatusMessage(
+          `Moved ${tabIdsToMove.length} tab(s) to group "${
+            groupInfo.title || `Group ${targetGroupId}`
+          }".`
+        );
+      } catch (groupError) {
+        console.warn("Could not get group info after moving tabs:", groupError);
+        setGroupStatusMessage(
+          `Moved ${tabIdsToMove.length} tab(s) to group ${targetGroupId}.`
+        );
+      }
+    }
+    await renderTabs();
+    await loadExistingGroups();
+    deselectAllCheckboxes();
+  } catch (error) {
+    console.error("Error moving tabs to group:", error);
+    setGroupStatusMessage(`Error moving tabs: ${error.message}`, true);
+    if (chrome.runtime.lastError) {
+      console.error("Chrome runtime error:", chrome.runtime.lastError.message);
+    }
+    await renderTabs();
+    await loadExistingGroups();
+  }
+}
 
-// Function to display status messages (Same as before)
+// --- Utility Functions --- (Code remains the same)
 function setStatusMessage(message, isError = false) {
   statusMessageElement.textContent = message;
   statusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
@@ -666,16 +757,31 @@ function setStatusMessage(message, isError = false) {
     }
   }, timeout);
 }
+function setGroupStatusMessage(message, isError = false) {
+  groupStatusMessageElement.textContent = message;
+  groupStatusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
+  const timeout = 5000;
+  setTimeout(() => {
+    if (groupStatusMessageElement.textContent === message) {
+      groupStatusMessageElement.textContent = "";
+    }
+  }, timeout);
+}
 
 // --- Event Listeners ---
-
-// Initial load (Same as before)
 document.addEventListener("DOMContentLoaded", () => {
   renderTabs();
   renderBookmarkTree();
+  loadExistingGroups();
+  populateNewGroupColors();
+
+  // Add event listeners for the new tab buttons
+  tabButtons.forEach((button) => {
+    button.addEventListener("click", handleTabClick);
+  });
 });
 
-// Listen for tab events (Same as before)
+// Existing listeners...
 chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener(renderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -690,33 +796,32 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 chrome.tabs.onAttached.addListener(renderTabs);
 chrome.tabs.onDetached.addListener(renderTabs);
-
-// Listen for tab group events (Same as before)
-chrome.tabGroups.onCreated.addListener(renderTabs);
-chrome.tabGroups.onRemoved.addListener(renderTabs);
-chrome.tabGroups.onUpdated.addListener(renderTabs);
-chrome.tabGroups.onMoved.addListener(renderTabs);
-
-// Listen for bookmark changes (Same as before)
+function handleGroupChange() {
+  renderTabs();
+  loadExistingGroups();
+}
+chrome.tabGroups.onCreated.addListener(handleGroupChange);
+chrome.tabGroups.onRemoved.addListener(handleGroupChange);
+chrome.tabGroups.onUpdated.addListener(handleGroupChange);
+chrome.tabGroups.onMoved.addListener(handleGroupChange);
 chrome.bookmarks.onCreated.addListener(renderBookmarkTree);
 chrome.bookmarks.onRemoved.addListener(renderBookmarkTree);
 chrome.bookmarks.onChanged.addListener(renderBookmarkTree);
 chrome.bookmarks.onMoved.addListener(renderBookmarkTree);
-
-// Listener for the "Select All" checkbox (Same as before)
 selectAllCheckbox.addEventListener("change", handleSelectAllChange);
-
-// Listener for the "Bookmark Selected" button (Same as before)
 bookmarkSelectedBtn.addEventListener("click", handleBookmarkSelectedClick);
-
-// Listener for the "Bookmark & Delete" button (Same as before)
 bookmarkDeleteBtn.addEventListener("click", handleBookmarkAndDeleteClick);
-
-// Optional: Enter key listener (Same as before)
+targetGroupSelect.addEventListener("change", handleTargetGroupChange);
+moveToGroupBtn.addEventListener("click", handleMoveToGroupClick);
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
     handleBookmarkSelectedClick();
   }
 });
+newGroupNameInput.addEventListener("keypress", (event) => {
+  if (event.key === "Enter") {
+    handleMoveToGroupClick();
+  }
+});
 
-console.log("Sidebar script loaded (with group-colored tab backgrounds).");
+console.log("Sidebar script loaded (with action tabs).");
