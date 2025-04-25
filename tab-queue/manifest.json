@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Queue",
+  "version": "1.0",
+  "description": "Queues links to be opened later in a side panel.",
+  "permissions": ["tabs", "activeTab", "storage", "sidePanel", "contextMenus"],
+  "action": {
+    "default_title": "Open Tab Queue"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "side_panel.html"
+  }
+}

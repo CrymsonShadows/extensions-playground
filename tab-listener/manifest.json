@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Lister",
+  "version": "1.0",
+  "description": "Lists tabs in the side panel with pagination",
+  "permissions": ["tabs", "activeTab", "storage", "sidePanel"],
+  "action": {
+    "default_title": "Click to open panel"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "side_panel.html"
+  }
+}
