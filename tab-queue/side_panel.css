@@ -1,0 +1,45 @@
+body {
+  font-family: sans-serif;
+  padding: 10px;
+  min-width: 250px; /* Ensure panel has some width */
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 1.2em;
+  border-bottom: 1px solid #ccc;
+  padding-bottom: 5px;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+  word-wrap: break-word; /* Prevent long URLs from overflowing */
+}
+
+li:last-child {
+  border-bottom: none;
+}
+
+li.empty-message {
+  font-style: italic;
+  color: #777;
+  border-bottom: none;
+}
+
+a {
+  text-decoration: none;
+  color: #007bff; /* Standard link blue */
+  cursor: pointer;
+}
+
+a:hover {
+  text-decoration: underline;
+  color: #0056b3;
+}
