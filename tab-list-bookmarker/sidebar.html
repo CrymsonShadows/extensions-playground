@@ -14,10 +14,14 @@
             <label for="new-folder-name">New Folder Name:</label>
             <input type="text" id="new-folder-name" placeholder="Enter name for new folder" class="input-field">
 
-            <label for="parent-folder-select">Place New Folder Inside:</label>
-            <select id="parent-folder-select" class="input-field">
-                <option value="">Loading folders...</option>
-                </select>
+            <label>Place New Folder Inside:</label>
+            <div id="selected-folder-display" class="selected-folder-display">
+                Select a folder below...
+            </div>
+            <div id="bookmark-tree-container" class="bookmark-tree-container">
+                <p>Loading folders...</p>
+            </div>
+            <input type="hidden" id="selected-folder-id">
 
             <div class="button-group">
                  <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>

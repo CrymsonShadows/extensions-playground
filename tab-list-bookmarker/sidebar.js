@@ -3,14 +3,21 @@
 const tabListElement = document.getElementById("tab-list");
 const bookmarkSelectedBtn = document.getElementById("bookmark-selected-btn");
 const newFolderNameInput = document.getElementById("new-folder-name");
-const parentFolderSelect = document.getElementById("parent-folder-select");
+// const parentFolderSelect = document.getElementById('parent-folder-select'); // REMOVED
+const bookmarkTreeContainer = document.getElementById(
+  "bookmark-tree-container"
+); // NEW
+const selectedFolderDisplay = document.getElementById(
+  "selected-folder-display"
+); // NEW
+const selectedFolderIdInput = document.getElementById("selected-folder-id"); // NEW
 const deselectAllBtn = document.getElementById("deselect-all-btn");
 const statusMessageElement = document.getElementById("status-message");
-const selectAllCheckbox = document.getElementById("select-all-checkbox"); // Get the new checkbox
+const selectAllCheckbox = document.getElementById("select-all-checkbox");
 
 // --- Tab Loading and Display ---
 
-// Function to render the list of tabs
+// Function to render the list of tabs (Same as before)
 async function renderTabs() {
   try {
     const tabs = await chrome.tabs.query({ currentWindow: true });
@@ -18,14 +25,12 @@ async function renderTabs() {
 
     if (tabs.length === 0) {
       tabListElement.innerHTML = "<p>No tabs found in this window.</p>";
-      selectAllCheckbox.checked = false; // Ensure select all is unchecked if no tabs
-      selectAllCheckbox.disabled = true; // Disable if no tabs
+      selectAllCheckbox.checked = false;
+      selectAllCheckbox.disabled = true;
       return;
     }
 
-    selectAllCheckbox.disabled = false; // Enable if there are tabs
-
-    let allSelected = true; // Flag to track if all tabs are selected
+    selectAllCheckbox.disabled = false;
 
     tabs.forEach((tab) => {
       const listItem = document.createElement("div");
@@ -37,14 +42,8 @@ async function renderTabs() {
       checkbox.dataset.tabId = tab.id;
       checkbox.dataset.tabUrl = tab.url;
       checkbox.dataset.tabTitle = tab.title;
-      // Add listener to individual checkbox to update Select All state
       checkbox.addEventListener("change", updateSelectAllCheckboxState);
       listItem.appendChild(checkbox);
-
-      // Keep track if any checkbox is unchecked
-      if (!checkbox.checked) {
-        allSelected = false;
-      }
 
       const favicon = document.createElement("img");
       favicon.className = "tab-favicon";
@@ -74,7 +73,6 @@ async function renderTabs() {
       tabListElement.appendChild(listItem);
     });
 
-    // Set the initial state of the Select All checkbox based on loaded tabs
     updateSelectAllCheckboxState();
   } catch (error) {
     console.error("Error loading tabs:", error);
@@ -90,11 +88,10 @@ async function renderTabs() {
 
 // --- Tab Actions ---
 
-// Function to close a specific tab
+// Function to close a specific tab (Same as before)
 async function closeTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
-    // List will refresh via listeners, which will call renderTabs and updateSelectAllCheckboxState
   } catch (error) {
     console.error(`Error closing tab ${tabId}:`, error);
     setStatusMessage(`Error closing tab: ${error.message}`, true);
@@ -104,11 +101,11 @@ async function closeTab(tabId) {
   }
 }
 
-// Function to get selected tabs
+// Function to get selected tabs (Same as before)
 function getSelectedTabs() {
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
-  ); // Be more specific
+  );
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
     selectedTabs.push({
@@ -120,7 +117,7 @@ function getSelectedTabs() {
   return selectedTabs;
 }
 
-// Function to handle the "Select All" checkbox click
+// Function to handle the "Select All" checkbox click (Same as before)
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
@@ -131,7 +128,7 @@ function handleSelectAllChange() {
   });
 }
 
-// Function to update the state of the "Select All" checkbox based on individual checkboxes
+// Function to update the state of the "Select All" checkbox (Same as before)
 function updateSelectAllCheckboxState() {
   const individualCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
@@ -154,66 +151,115 @@ function updateSelectAllCheckboxState() {
       selectAllCheckbox.checked = false;
       selectAllCheckbox.indeterminate = false;
     } else {
-      // Set indeterminate state if some but not all are checked
       selectAllCheckbox.checked = false;
       selectAllCheckbox.indeterminate = true;
     }
   }
 }
 
-// Function to deselect all checkboxes (now also updates Select All checkbox)
+// Function to deselect all checkboxes (Same as before)
 function deselectAll() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   checkboxes.forEach((checkbox) => (checkbox.checked = false));
-  updateSelectAllCheckboxState(); // Update the master checkbox state
+  updateSelectAllCheckboxState();
 }
 
 // --- Bookmarking ---
 
-// Function to recursively traverse the bookmark tree and populate the dropdown
-function populateBookmarkFolders(nodes, parentElement, depth = 0) {
+// NEW: Function to build a single level of the bookmark tree recursively
+function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
+    // Only process folders (nodes without a URL)
     if (!node.url) {
-      const option = document.createElement("option");
-      option.value = node.id;
-      option.textContent = `${"--".repeat(depth)} ${
-        node.title || "Unnamed Folder"
-      }`;
-      parentElement.appendChild(option);
-      if (node.children && node.children.length > 0) {
-        populateBookmarkFolders(node.children, parentElement, depth + 1);
+      const folderDiv = document.createElement("div");
+      folderDiv.className = "bookmark-folder";
+      folderDiv.dataset.folderId = node.id;
+
+      const detailsDiv = document.createElement("div");
+      detailsDiv.className = "folder-details";
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "folder-name";
+      nameSpan.textContent = node.title || "Unnamed Folder";
+      nameSpan.title = node.title || "Unnamed Folder"; // Tooltip
+      detailsDiv.appendChild(nameSpan);
+
+      // Click listener for selection and expansion/collapse
+      detailsDiv.addEventListener("click", (event) => {
+        event.stopPropagation(); // Prevent clicks bubbling up the tree
+
+        // --- Selection Logic ---
+        // Remove 'selected' class from previously selected item
+        const currentlySelected = bookmarkTreeContainer.querySelector(
+          ".folder-details.selected"
+        );
+        if (currentlySelected) {
+          currentlySelected.classList.remove("selected");
+        }
+        // Add 'selected' class to the clicked item
+        detailsDiv.classList.add("selected");
+        // Update hidden input and display text
+        selectedFolderIdInput.value = node.id;
+        selectedFolderDisplay.textContent = nameSpan.textContent;
+        selectedFolderDisplay.style.fontStyle = "normal"; // Remove italic style
+
+        // --- Expansion/Collapse Logic ---
+        if (folderDiv.classList.contains("has-children")) {
+          folderDiv.classList.toggle("expanded");
+        }
+      });
+
+      folderDiv.appendChild(detailsDiv);
+
+      // Check if the folder has child folders
+      const hasChildFolders =
+        node.children && node.children.some((child) => !child.url);
+
+      if (hasChildFolders) {
+        folderDiv.classList.add("has-children");
+        const childrenContainer = document.createElement("div");
+        childrenContainer.className = "child-folders";
+        // Recursively build the next level
+        buildBookmarkTreeLevel(node.children, childrenContainer);
+        folderDiv.appendChild(childrenContainer);
       }
+
+      parentElement.appendChild(folderDiv);
     }
   });
 }
 
-// Function to load bookmark folders into the select dropdown
-async function loadBookmarkFolders() {
+// NEW: Function to render the entire bookmark tree
+async function renderBookmarkTree() {
   try {
     const bookmarkTree = await chrome.bookmarks.getTree();
-    parentFolderSelect.innerHTML = "";
+    bookmarkTreeContainer.innerHTML = ""; // Clear previous tree/loading message
 
+    // The root node (ID '0') usually contains top-level folders like
+    // "Bookmarks Bar" (ID '1'), "Other Bookmarks" (ID '2'), "Mobile Bookmarks"
     if (bookmarkTree.length > 0 && bookmarkTree[0].children) {
-      populateBookmarkFolders(bookmarkTree[0].children, parentFolderSelect, 0);
+      // Start building from the children of the root node
+      buildBookmarkTreeLevel(bookmarkTree[0].children, bookmarkTreeContainer);
     } else {
-      parentFolderSelect.innerHTML =
-        '<option value="">No folders found</option>';
+      bookmarkTreeContainer.innerHTML = "<p>No bookmark folders found.</p>";
     }
 
-    const defaultFolderId = "2"; // 'Other Bookmarks'
+    // Reset selection display if tree is empty or rebuilt
     if (
-      parentFolderSelect.querySelector(`option[value="${defaultFolderId}"]`)
+      !selectedFolderIdInput.value ||
+      !document.querySelector(
+        `.bookmark-folder[data-folder-id="${selectedFolderIdInput.value}"]`
+      )
     ) {
-      parentFolderSelect.value = defaultFolderId;
-    } else if (parentFolderSelect.options.length > 0) {
-      parentFolderSelect.value = parentFolderSelect.options[0].value;
+      selectedFolderIdInput.value = "";
+      selectedFolderDisplay.textContent = "Select a folder below...";
+      selectedFolderDisplay.style.fontStyle = "italic";
     }
   } catch (error) {
-    console.error("Error loading bookmark folders:", error);
-    parentFolderSelect.innerHTML =
-      '<option value="">Error loading folders</option>';
+    console.error("Error rendering bookmark tree:", error);
+    bookmarkTreeContainer.innerHTML = "<p>Error loading folders.</p>";
     setStatusMessage("Could not load bookmark folders.", true);
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
@@ -221,11 +267,11 @@ async function loadBookmarkFolders() {
   }
 }
 
-// Function to bookmark selected tabs into a new folder
+// Function to bookmark selected tabs into a new folder (UPDATED)
 async function bookmarkSelected() {
   const selectedTabs = getSelectedTabs();
   const folderName = newFolderNameInput.value.trim();
-  const parentFolderId = parentFolderSelect.value;
+  const parentFolderId = selectedFolderIdInput.value; // Get ID from hidden input
 
   if (selectedTabs.length === 0) {
     setStatusMessage("No tabs selected to bookmark.", true);
@@ -236,14 +282,21 @@ async function bookmarkSelected() {
     newFolderNameInput.focus();
     return;
   }
+  // Check if a parent folder has been selected from the tree
   if (!parentFolderId) {
-    setStatusMessage("Please select a parent folder.", true);
+    setStatusMessage(
+      "Please select a parent folder from the tree below.",
+      true
+    );
+    // Optionally focus the tree container or shake it visually
+    bookmarkTreeContainer.focus(); // May not work directly, visual cue better
     return;
   }
 
   setStatusMessage("Bookmarking...");
 
   try {
+    // Create the new folder under the selected parent
     const newFolder = await chrome.bookmarks.create({
       parentId: parentFolderId,
       title: folderName,
@@ -252,6 +305,7 @@ async function bookmarkSelected() {
       `Created bookmark folder: ${newFolder.title} (ID: ${newFolder.id}) under parent ID: ${parentFolderId}`
     );
 
+    // Create bookmarks inside the new folder
     let bookmarkPromises = selectedTabs.map((tab) => {
       if (!tab.url || tab.url.startsWith("chrome://")) {
         console.warn(
@@ -273,7 +327,27 @@ async function bookmarkSelected() {
       `Successfully bookmarked ${successfulBookmarks} tab(s) to folder "${folderName}".`
     );
     newFolderNameInput.value = "";
-    deselectAll(); // Deselect after bookmarking
+    deselectAll(); // Deselect tabs after bookmarking
+
+    // Optional: Refresh the bookmark tree to show the newly created folder
+    // Be careful as this might collapse the tree. A more sophisticated update
+    // could insert the new node without full refresh, but refresh is simpler.
+    await renderBookmarkTree();
+    // Re-select the parent folder visually after refresh if possible
+    const parentDetails = bookmarkTreeContainer.querySelector(
+      `.bookmark-folder[data-folder-id="${parentFolderId}"] > .folder-details`
+    );
+    if (parentDetails) {
+      parentDetails.classList.add("selected");
+      selectedFolderDisplay.textContent =
+        parentDetails.querySelector(".folder-name").textContent;
+      selectedFolderDisplay.style.fontStyle = "normal";
+    } else {
+      // If parent somehow disappeared (unlikely), reset selection
+      selectedFolderIdInput.value = "";
+      selectedFolderDisplay.textContent = "Select a folder below...";
+      selectedFolderDisplay.style.fontStyle = "italic";
+    }
   } catch (error) {
     console.error("Error bookmarking tabs:", error);
     setStatusMessage(`Error creating bookmarks: ${error.message}`, true);
@@ -285,7 +359,7 @@ async function bookmarkSelected() {
 
 // --- Utility Functions ---
 
-// Function to display status messages
+// Function to display status messages (Same as before)
 function setStatusMessage(message, isError = false) {
   statusMessageElement.textContent = message;
   statusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
@@ -301,44 +375,40 @@ function setStatusMessage(message, isError = false) {
 // Initial load
 document.addEventListener("DOMContentLoaded", () => {
   renderTabs();
-  loadBookmarkFolders();
+  renderBookmarkTree(); // Render the bookmark tree instead of loading folders to select
 });
 
-// Listen for tab events
+// Listen for tab events (Same as before)
 chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener(renderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // Reduced re-rendering frequency, but ensure state is updated
   if (changeInfo.url || changeInfo.title || changeInfo.status === "complete") {
-    renderTabs(); // Re-render might be needed if title/URL changes affect bookmarking data
-  } else if (changeInfo.status) {
-    // Potentially just update favicon if only status changes without title/URL change
-    // Or simply rely on renderTabs for simplicity for now.
+    renderTabs();
   }
 });
 chrome.tabs.onAttached.addListener(renderTabs);
 chrome.tabs.onDetached.addListener(renderTabs);
 
-// Listen for bookmark changes
-chrome.bookmarks.onCreated.addListener(loadBookmarkFolders);
-chrome.bookmarks.onRemoved.addListener(loadBookmarkFolders);
-chrome.bookmarks.onChanged.addListener(loadBookmarkFolders);
-chrome.bookmarks.onMoved.addListener(loadBookmarkFolders);
+// Listen for bookmark changes - Now re-renders the tree
+chrome.bookmarks.onCreated.addListener(renderBookmarkTree);
+chrome.bookmarks.onRemoved.addListener(renderBookmarkTree);
+chrome.bookmarks.onChanged.addListener(renderBookmarkTree);
+chrome.bookmarks.onMoved.addListener(renderBookmarkTree);
 
-// Listener for the "Select All" checkbox
+// Listener for the "Select All" checkbox (Same as before)
 selectAllCheckbox.addEventListener("change", handleSelectAllChange);
 
-// Listener for the bookmark button
+// Listener for the bookmark button (Same as before)
 bookmarkSelectedBtn.addEventListener("click", bookmarkSelected);
 
-// Listener for the deselect all button
+// Listener for the deselect all button (Same as before)
 deselectAllBtn.addEventListener("click", deselectAll);
 
-// Optional: Enter key listener
+// Optional: Enter key listener (Same as before)
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
     bookmarkSelected();
   }
 });
 
-console.log("Sidebar script loaded (with Select All).");
+console.log("Sidebar script loaded (with interactive bookmark tree).");
