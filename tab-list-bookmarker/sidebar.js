@@ -13,77 +13,200 @@ const selectedFolderIdInput = document.getElementById("selected-folder-id");
 const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
 const statusMessageElement = document.getElementById("status-message");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
-const selectedCountSpan = document.getElementById("selected-count"); // NEW: Get the count span
+const selectedCountSpan = document.getElementById("selected-count");
+
+// Map Chrome group colors to CSS-friendly values (Hex)
+const groupColorMap = {
+  grey: "#DADCE0",
+  blue: "#89B4F8",
+  red: "#F28B82",
+  yellow: "#FDD663",
+  green: "#81C995",
+  pink: "#FF8BCB",
+  purple: "#C58AF9",
+  cyan: "#78D9EC",
+  orange: "#FCAD70",
+};
+
+// NEW: Map group colors to lighter background shades for tab items
+const groupBackgroundColorMap = {
+  grey: "#F1F3F4", // Lighter grey
+  blue: "#E8F0FE", // Lighter blue
+  red: "#FCE8E6", // Lighter red
+  yellow: "#FEF7E0", // Lighter yellow
+  green: "#E6F4EA", // Lighter green
+  pink: "#FCE8F4", // Lighter pink
+  purple: "#F3E8FD", // Lighter purple
+  cyan: "#E0FCFF", // Lighter cyan
+  orange: "#FEEFDC", // Lighter orange
+};
 
 // --- Tab Loading and Display ---
 
-// Function to render the list of tabs (Same as before)
+// Helper function to create a single tab item element
+// UPDATED: Accepts groupColorName ('blue', 'red', etc.)
+function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
+  const listItem = document.createElement("div");
+  listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
+  listItem.dataset.tabId = tab.id;
+  listItem.dataset.groupId = tab.groupId;
+
+  // Apply background color if in a group with a known color
+  if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
+    listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
+    // Add a border in the original group color for visual connection
+    listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
+    // Adjust padding slightly to account for the border
+    listItem.style.paddingLeft = isInGroup ? "21px" : "15px"; // Original was 25px/15px
+  }
+
+  // Checkbox
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.dataset.tabId = tab.id;
+  checkbox.dataset.groupId = tab.groupId;
+  checkbox.dataset.tabUrl = tab.url;
+  checkbox.dataset.tabTitle = tab.title;
+  checkbox.addEventListener("change", updateSelectAllCheckboxState);
+  listItem.appendChild(checkbox);
+
+  // Favicon
+  const favicon = document.createElement("img");
+  favicon.className = "tab-favicon";
+  favicon.src = tab.favIconUrl || "icons/default_favicon.png";
+  favicon.alt = "";
+  favicon.onerror = () => {
+    favicon.src = "icons/default_favicon.png";
+  };
+  listItem.appendChild(favicon);
+
+  // Title
+  const title = document.createElement("span");
+  title.className = "tab-title";
+  title.textContent = tab.title || tab.url;
+  title.title = tab.title || tab.url;
+  listItem.appendChild(title);
+
+  // Close Button
+  const closeButton = document.createElement("button");
+  closeButton.className = "close-tab-btn";
+  closeButton.innerHTML = "&times;";
+  closeButton.title = "Close Tab";
+  closeButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    closeTab(tab.id);
+  });
+  listItem.appendChild(closeButton);
+
+  return listItem;
+}
+
+// Function to render the list of tabs, now including groups
+// UPDATED: Passes group color to createTabItemElement
 async function renderTabs() {
   try {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    tabListElement.innerHTML = ""; // Clear the current list
+    const [tabs, groups] = await Promise.all([
+      chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
+      chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
+    ]);
+
+    tabListElement.innerHTML = "";
 
     if (tabs.length === 0) {
       tabListElement.innerHTML = "<p>No tabs found in this window.</p>";
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
-      updateSelectAllCheckboxState(); // Update count to (0)
+      updateSelectAllCheckboxState();
       return;
     }
 
     selectAllCheckbox.disabled = false;
 
+    const groupMap = new Map(groups.map((group) => [group.id, group]));
+    const tabsByGroup = new Map();
+    const ungroupedTabs = [];
+
     tabs.forEach((tab) => {
-      const listItem = document.createElement("div");
-      listItem.className = "tab-item";
-      listItem.dataset.tabId = tab.id;
-
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.dataset.tabId = tab.id;
-      checkbox.dataset.tabUrl = tab.url;
-      checkbox.dataset.tabTitle = tab.title;
-      // Ensure count updates when individual checkboxes change
-      checkbox.addEventListener("change", updateSelectAllCheckboxState);
-      listItem.appendChild(checkbox);
-
-      const favicon = document.createElement("img");
-      favicon.className = "tab-favicon";
-      favicon.src = tab.favIconUrl || "icons/default_favicon.png";
-      favicon.alt = "";
-      favicon.onerror = () => {
-        favicon.src = "icons/default_favicon.png";
-      };
-      listItem.appendChild(favicon);
-
-      const title = document.createElement("span");
-      title.className = "tab-title";
-      title.textContent = tab.title || tab.url;
-      title.title = tab.title || tab.url;
-      listItem.appendChild(title);
-
-      const closeButton = document.createElement("button");
-      closeButton.className = "close-tab-btn";
-      closeButton.innerHTML = "&times;";
-      closeButton.title = "Close Tab";
-      closeButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        closeTab(tab.id);
-      });
-      listItem.appendChild(closeButton);
-
-      tabListElement.appendChild(listItem);
+      if (
+        tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE &&
+        groupMap.has(tab.groupId)
+      ) {
+        if (!tabsByGroup.has(tab.groupId)) {
+          tabsByGroup.set(tab.groupId, []);
+        }
+        tabsByGroup.get(tab.groupId).push(tab);
+      } else {
+        ungroupedTabs.push(tab);
+      }
     });
 
-    // Update Select All checkbox state and selected count after loading
+    // Render groups first
+    groups.forEach((group) => {
+      const groupTabs = tabsByGroup.get(group.id);
+      if (!groupTabs || groupTabs.length === 0) return;
+
+      // Create Group Header
+      const header = document.createElement("div");
+      header.className = "tab-group-header";
+      header.dataset.groupId = group.id;
+      // Style header background slightly darker than tabs
+      header.style.backgroundColor =
+        groupBackgroundColorMap[group.color] || "#F1F3F4";
+      header.style.borderBottom = `1px solid ${
+        groupColorMap[group.color] || "#DADCE0"
+      }`;
+
+      // Group Checkbox
+      const groupCheckbox = document.createElement("input");
+      groupCheckbox.type = "checkbox";
+      groupCheckbox.title = `Select/Deselect Group: ${
+        group.title || "Unnamed Group"
+      }`;
+      groupCheckbox.dataset.groupId = group.id;
+      groupCheckbox.className = "group-checkbox";
+      groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
+      header.appendChild(groupCheckbox);
+
+      // Color Indicator (using original group color)
+      const colorIndicator = document.createElement("span");
+      colorIndicator.className = "group-color-indicator";
+      colorIndicator.style.backgroundColor =
+        groupColorMap[group.color] || "#DADCE0";
+      header.appendChild(colorIndicator);
+
+      // Group Title
+      const groupTitle = document.createElement("span");
+      groupTitle.className = "group-title";
+      groupTitle.textContent = group.title || "Unnamed Group";
+      header.appendChild(groupTitle);
+
+      tabListElement.appendChild(header);
+
+      // Render Tabs within the group, passing the color name
+      groupTabs.forEach((tab) => {
+        // Pass the group color name (e.g., 'blue')
+        tabListElement.appendChild(
+          createTabItemElement(tab, true, group.color)
+        );
+      });
+    });
+
+    // Render Ungrouped Tabs
+    if (ungroupedTabs.length > 0) {
+      ungroupedTabs.forEach((tab) => {
+        // Pass false for isInGroup and null for color
+        tabListElement.appendChild(createTabItemElement(tab, false, null));
+      });
+    }
+
     updateSelectAllCheckboxState();
   } catch (error) {
-    console.error("Error loading tabs:", error);
+    console.error("Error loading tabs/groups:", error);
     tabListElement.innerHTML =
       "<p>Error loading tabs. See console for details.</p>";
     selectAllCheckbox.checked = false;
     selectAllCheckbox.disabled = true;
-    selectedCountSpan.textContent = "(0)"; // Reset count on error
+    selectedCountSpan.textContent = "(0)";
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
@@ -96,8 +219,6 @@ async function renderTabs() {
 async function closeTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
-    // The list will refresh automatically via the onRemoved listener,
-    // which calls renderTabs -> updateSelectAllCheckboxState
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
@@ -135,7 +256,23 @@ function getSelectedTabs() {
   return selectedTabs;
 }
 
-// Function to handle the "Select All" checkbox click
+// --- Checkbox State Management ---
+
+// Listener for group checkboxes (Same as before)
+function handleGroupCheckboxChange(event) {
+  const groupCheckbox = event.target;
+  const groupId = groupCheckbox.dataset.groupId;
+  const isChecked = groupCheckbox.checked;
+  const memberTabCheckboxes = tabListElement.querySelectorAll(
+    `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
+  );
+  memberTabCheckboxes.forEach((tabCheckbox) => {
+    tabCheckbox.checked = isChecked;
+  });
+  updateSelectAllCheckboxState();
+}
+
+// Function to handle the main "Select All" checkbox click (Same as before)
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
@@ -144,34 +281,84 @@ function handleSelectAllChange() {
   individualCheckboxes.forEach((checkbox) => {
     checkbox.checked = isChecked;
   });
-  // Update count and select all state after changing all checkboxes
+  const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
+  groupCheckboxes.forEach((groupCheckbox) => {
+    groupCheckbox.checked = isChecked;
+    groupCheckbox.indeterminate = false;
+  });
   updateSelectAllCheckboxState();
 }
 
-// Function to update the state of the "Select All" checkbox AND the selected count
+// Function to update the state of ALL checkboxes (Main, Groups, Counts) (Same as before)
 function updateSelectAllCheckboxState() {
-  const individualCheckboxes = tabListElement.querySelectorAll(
+  const allTabCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
-  const totalCheckboxes = individualCheckboxes.length;
-  const checkedCheckboxes = tabListElement.querySelectorAll(
+  const totalTabs = allTabCheckboxes.length;
+  const totalSelectedTabs = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
   ).length;
-
-  // Update the count display
-  selectedCountSpan.textContent = `(${checkedCheckboxes})`; // Update the text content
-
-  // Update the Select All checkbox state
-  if (totalCheckboxes === 0) {
+  selectedCountSpan.textContent = `(${totalSelectedTabs})`;
+  let allGroupsChecked = true;
+  let noGroupsChecked = true;
+  let anyGroupIndeterminate = false;
+  const groupHeaders = tabListElement.querySelectorAll(".tab-group-header");
+  groupHeaders.forEach((header) => {
+    const groupId = header.dataset.groupId;
+    const groupCheckbox = header.querySelector(".group-checkbox");
+    const memberTabCheckboxes = tabListElement.querySelectorAll(
+      `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
+    );
+    const totalInGroup = memberTabCheckboxes.length;
+    const selectedInGroup = tabListElement.querySelectorAll(
+      `.tab-item input[type="checkbox"][data-group-id="${groupId}"]:checked`
+    ).length;
+    if (totalInGroup > 0) {
+      if (selectedInGroup === totalInGroup) {
+        groupCheckbox.checked = true;
+        groupCheckbox.indeterminate = false;
+        noGroupsChecked = false;
+      } else if (selectedInGroup === 0) {
+        groupCheckbox.checked = false;
+        groupCheckbox.indeterminate = false;
+        allGroupsChecked = false;
+      } else {
+        groupCheckbox.checked = false;
+        groupCheckbox.indeterminate = true;
+        allGroupsChecked = false;
+        noGroupsChecked = false;
+        anyGroupIndeterminate = true;
+      }
+    } else {
+      groupCheckbox.checked = false;
+      groupCheckbox.indeterminate = false;
+      groupCheckbox.disabled = true;
+    }
+  });
+  const ungroupedCheckboxes = tabListElement.querySelectorAll(
+    `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]`
+  );
+  const totalUngrouped = ungroupedCheckboxes.length;
+  const selectedUngrouped = tabListElement.querySelectorAll(
+    `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]:checked`
+  ).length;
+  let allUngroupedChecked =
+    totalUngrouped > 0 && selectedUngrouped === totalUngrouped;
+  let noUngroupedChecked = selectedUngrouped === 0;
+  if (totalTabs === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
     selectAllCheckbox.disabled = true;
   } else {
     selectAllCheckbox.disabled = false;
-    if (checkedCheckboxes === totalCheckboxes) {
+    if (allGroupsChecked && (totalUngrouped === 0 || allUngroupedChecked)) {
       selectAllCheckbox.checked = true;
       selectAllCheckbox.indeterminate = false;
-    } else if (checkedCheckboxes === 0) {
+    } else if (
+      noGroupsChecked &&
+      (totalUngrouped === 0 || noUngroupedChecked) &&
+      !anyGroupIndeterminate
+    ) {
       selectAllCheckbox.checked = false;
       selectAllCheckbox.indeterminate = false;
     } else {
@@ -181,13 +368,18 @@ function updateSelectAllCheckboxState() {
   }
 }
 
-// Function to deselect all checkboxes (used internally after bookmarking)
+// Function to deselect all checkboxes (Same as before)
 function deselectAllCheckboxes() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   checkboxes.forEach((checkbox) => (checkbox.checked = false));
-  updateSelectAllCheckboxState(); // Update count and select all state
+  const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
+  groupCheckboxes.forEach((groupCheckbox) => {
+    groupCheckbox.checked = false;
+    groupCheckbox.indeterminate = false;
+  });
+  updateSelectAllCheckboxState();
 }
 
 // --- Bookmarking ---
@@ -370,7 +562,7 @@ async function performBookmarkOperation(
     }
     setStatusMessage(successMessage);
     newFolderNameInput.value = "";
-    deselectAllCheckboxes(); // This now updates the count too
+    deselectAllCheckboxes();
     return { success: true, bookmarkedTabs: bookmarkedTabs };
   } catch (error) {
     console.error("Error during bookmark operation:", error);
@@ -487,12 +679,23 @@ document.addEventListener("DOMContentLoaded", () => {
 chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener(renderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.url || changeInfo.title || changeInfo.status === "complete") {
+  if (
+    changeInfo.url ||
+    changeInfo.title ||
+    changeInfo.status === "complete" ||
+    changeInfo.groupId !== undefined
+  ) {
     renderTabs();
   }
 });
 chrome.tabs.onAttached.addListener(renderTabs);
 chrome.tabs.onDetached.addListener(renderTabs);
+
+// Listen for tab group events (Same as before)
+chrome.tabGroups.onCreated.addListener(renderTabs);
+chrome.tabGroups.onRemoved.addListener(renderTabs);
+chrome.tabGroups.onUpdated.addListener(renderTabs);
+chrome.tabGroups.onMoved.addListener(renderTabs);
 
 // Listen for bookmark changes (Same as before)
 chrome.bookmarks.onCreated.addListener(renderBookmarkTree);
@@ -516,4 +719,4 @@ newFolderNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (with selected count display).");
+console.log("Sidebar script loaded (with group-colored tab backgrounds).");
