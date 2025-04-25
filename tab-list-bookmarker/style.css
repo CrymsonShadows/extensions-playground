@@ -42,6 +42,22 @@ h3 {
 .tabs-header h2 {
   margin-bottom: 0;
   border-bottom: none;
+  display: flex; /* Use flex to align count span */
+  align-items: baseline; /* Align text baseline */
+  gap: 6px; /* Space between title and count */
+}
+
+/* Styling for the selected count span */
+.selected-count-display {
+  font-size: 0.8em; /* Smaller font size */
+  font-weight: normal; /* Normal weight */
+  color: #555; /* Grey color */
+  background-color: #e0e0e0; /* Light grey background */
+  padding: 2px 5px; /* Small padding */
+  border-radius: 4px; /* Rounded corners */
+  display: inline-block; /* Needed for padding/background */
+  min-width: 10px; /* Ensure it's visible even with single digit */
+  text-align: center;
 }
 
 .select-all-container {

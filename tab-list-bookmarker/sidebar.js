@@ -10,10 +10,10 @@ const selectedFolderDisplay = document.getElementById(
   "selected-folder-display"
 );
 const selectedFolderIdInput = document.getElementById("selected-folder-id");
-// const deselectAllBtn = document.getElementById('deselect-all-btn'); // REMOVED
-const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn"); // NEW
+const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
 const statusMessageElement = document.getElementById("status-message");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
+const selectedCountSpan = document.getElementById("selected-count"); // NEW: Get the count span
 
 // --- Tab Loading and Display ---
 
@@ -27,6 +27,7 @@ async function renderTabs() {
       tabListElement.innerHTML = "<p>No tabs found in this window.</p>";
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
+      updateSelectAllCheckboxState(); // Update count to (0)
       return;
     }
 
@@ -42,6 +43,7 @@ async function renderTabs() {
       checkbox.dataset.tabId = tab.id;
       checkbox.dataset.tabUrl = tab.url;
       checkbox.dataset.tabTitle = tab.title;
+      // Ensure count updates when individual checkboxes change
       checkbox.addEventListener("change", updateSelectAllCheckboxState);
       listItem.appendChild(checkbox);
 
@@ -73,6 +75,7 @@ async function renderTabs() {
       tabListElement.appendChild(listItem);
     });
 
+    // Update Select All checkbox state and selected count after loading
     updateSelectAllCheckboxState();
   } catch (error) {
     console.error("Error loading tabs:", error);
@@ -80,6 +83,7 @@ async function renderTabs() {
       "<p>Error loading tabs. See console for details.</p>";
     selectAllCheckbox.checked = false;
     selectAllCheckbox.disabled = true;
+    selectedCountSpan.textContent = "(0)"; // Reset count on error
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
@@ -92,9 +96,9 @@ async function renderTabs() {
 async function closeTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
-    // The list will refresh automatically via the onRemoved listener
+    // The list will refresh automatically via the onRemoved listener,
+    // which calls renderTabs -> updateSelectAllCheckboxState
   } catch (error) {
-    // Check if the error is because the tab doesn't exist (already closed)
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
       setStatusMessage(`Error closing tab: ${error.message}`, true);
@@ -105,7 +109,7 @@ async function closeTab(tabId) {
         );
       }
     } else {
-      console.log(`Tab ${tabId} already closed.`); // Ignore error if tab is already gone
+      console.log(`Tab ${tabId} already closed.`);
     }
   }
 }
@@ -117,10 +121,8 @@ function getSelectedTabs() {
   );
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
-    // Ensure we capture the ID correctly for later deletion
     const tabId = parseInt(checkbox.dataset.tabId, 10);
     if (!isNaN(tabId)) {
-      // Make sure tabId is a valid number
       selectedTabs.push({
         id: tabId,
         url: checkbox.dataset.tabUrl,
@@ -133,7 +135,7 @@ function getSelectedTabs() {
   return selectedTabs;
 }
 
-// Function to handle the "Select All" checkbox click (Same as before)
+// Function to handle the "Select All" checkbox click
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
@@ -142,9 +144,11 @@ function handleSelectAllChange() {
   individualCheckboxes.forEach((checkbox) => {
     checkbox.checked = isChecked;
   });
+  // Update count and select all state after changing all checkboxes
+  updateSelectAllCheckboxState();
 }
 
-// Function to update the state of the "Select All" checkbox (Same as before)
+// Function to update the state of the "Select All" checkbox AND the selected count
 function updateSelectAllCheckboxState() {
   const individualCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
@@ -154,6 +158,10 @@ function updateSelectAllCheckboxState() {
     '.tab-item input[type="checkbox"]:checked'
   ).length;
 
+  // Update the count display
+  selectedCountSpan.textContent = `(${checkedCheckboxes})`; // Update the text content
+
+  // Update the Select All checkbox state
   if (totalCheckboxes === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
@@ -179,7 +187,7 @@ function deselectAllCheckboxes() {
     '.tab-item input[type="checkbox"]'
   );
   checkboxes.forEach((checkbox) => (checkbox.checked = false));
-  updateSelectAllCheckboxState();
+  updateSelectAllCheckboxState(); // Update count and select all state
 }
 
 // --- Bookmarking ---
@@ -187,26 +195,19 @@ function deselectAllCheckboxes() {
 // Function to build a single level of the bookmark tree recursively (Same as before)
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
-    // Only process folders (nodes without a URL)
     if (!node.url) {
       const folderDiv = document.createElement("div");
       folderDiv.className = "bookmark-folder";
       folderDiv.dataset.folderId = node.id;
-
       const detailsDiv = document.createElement("div");
       detailsDiv.className = "folder-details";
-
       const nameSpan = document.createElement("span");
       nameSpan.className = "folder-name";
       nameSpan.textContent = node.title || "Unnamed Folder";
-      nameSpan.title = node.title || "Unnamed Folder"; // Tooltip
+      nameSpan.title = node.title || "Unnamed Folder";
       detailsDiv.appendChild(nameSpan);
-
-      // Click listener for selection and expansion/collapse
       detailsDiv.addEventListener("click", (event) => {
-        event.stopPropagation(); // Prevent clicks bubbling up the tree
-
-        // --- Selection Logic ---
+        event.stopPropagation();
         const currentlySelected = bookmarkTreeContainer.querySelector(
           ".folder-details.selected"
         );
@@ -217,19 +218,13 @@ function buildBookmarkTreeLevel(nodes, parentElement) {
         selectedFolderIdInput.value = node.id;
         selectedFolderDisplay.textContent = nameSpan.textContent;
         selectedFolderDisplay.style.fontStyle = "normal";
-
-        // --- Expansion/Collapse Logic ---
         if (folderDiv.classList.contains("has-children")) {
           folderDiv.classList.toggle("expanded");
         }
       });
-
       folderDiv.appendChild(detailsDiv);
-
-      // Check if the folder has child folders
       const hasChildFolders =
         node.children && node.children.some((child) => !child.url);
-
       if (hasChildFolders) {
         folderDiv.classList.add("has-children");
         const childrenContainer = document.createElement("div");
@@ -237,7 +232,6 @@ function buildBookmarkTreeLevel(nodes, parentElement) {
         buildBookmarkTreeLevel(node.children, childrenContainer);
         folderDiv.appendChild(childrenContainer);
       }
-
       parentElement.appendChild(folderDiv);
     }
   });
@@ -247,15 +241,12 @@ function buildBookmarkTreeLevel(nodes, parentElement) {
 async function renderBookmarkTree() {
   try {
     const bookmarkTree = await chrome.bookmarks.getTree();
-    bookmarkTreeContainer.innerHTML = ""; // Clear previous tree/loading message
-
+    bookmarkTreeContainer.innerHTML = "";
     if (bookmarkTree.length > 0 && bookmarkTree[0].children) {
       buildBookmarkTreeLevel(bookmarkTree[0].children, bookmarkTreeContainer);
     } else {
       bookmarkTreeContainer.innerHTML = "<p>No bookmark folders found.</p>";
     }
-
-    // Reset selection display if tree is empty or rebuilt
     if (
       !selectedFolderIdInput.value ||
       !document.querySelector(
@@ -276,17 +267,16 @@ async function renderBookmarkTree() {
   }
 }
 
-// Helper function to create bookmarks (UPDATED to return list of successfully bookmarked tabs)
+// Helper function to create bookmarks (Same as before)
 async function createBookmarksInFolder(tabs, targetFolderId) {
-  const successfullyBookmarkedTabs = []; // Store tabs that were bookmarked
+  const successfullyBookmarkedTabs = [];
   let createdCount = 0;
-
   for (const tab of tabs) {
     if (!tab.url || tab.url.startsWith("chrome://")) {
       console.warn(
         `Skipping invalid URL for bookmarking: ${tab.url || "Empty URL"}`
       );
-      continue; // Skip this tab
+      continue;
     }
     try {
       await chrome.bookmarks.create({
@@ -294,14 +284,13 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
         title: tab.title || tab.url,
         url: tab.url,
       });
-      successfullyBookmarkedTabs.push(tab); // Add tab to the success list
+      successfullyBookmarkedTabs.push(tab);
       createdCount++;
     } catch (error) {
       console.error(
         `Error creating bookmark for tab ${tab.id} (${tab.title}):`,
         error
       );
-      // Decide if you want to stop or continue on error. Continuing seems better.
       if (chrome.runtime.lastError) {
         console.error(
           "Chrome runtime error:",
@@ -313,10 +302,10 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
   console.log(
     `Attempted to bookmark ${tabs.length} tabs, successfully created ${createdCount} bookmarks.`
   );
-  return successfullyBookmarkedTabs; // Return the array of tabs
+  return successfullyBookmarkedTabs;
 }
 
-// Main function to handle bookmarking (UPDATED to return success status and bookmarked tabs)
+// Main function to handle bookmarking (Same as before)
 async function performBookmarkOperation(
   selectedTabs,
   newFolderName,
@@ -325,12 +314,9 @@ async function performBookmarkOperation(
 ) {
   let targetFolderId;
   let successMessage;
-  let bookmarkedTabs = []; // Initialize as empty array
-
+  let bookmarkedTabs = [];
   try {
-    // --- Determine Target Folder and Create Bookmarks ---
     if (newFolderName === "") {
-      // Case 1: Bookmark directly into the selected parent folder
       targetFolderId = parentFolderId;
       console.log(
         `Bookmarking directly into selected folder: ${parentFolderName} (ID: ${targetFolderId})`
@@ -338,16 +324,14 @@ async function performBookmarkOperation(
       bookmarkedTabs = await createBookmarksInFolder(
         selectedTabs,
         targetFolderId
-      ); // Capture returned tabs
+      );
       if (bookmarkedTabs.length > 0) {
         successMessage = `Successfully bookmarked ${bookmarkedTabs.length} tab(s) to folder "${parentFolderName}".`;
       } else {
-        // Handle case where no valid tabs were selected or bookmarking failed for all
         setStatusMessage("No valid tabs were bookmarked.", true);
         return { success: false, bookmarkedTabs: [] };
       }
     } else {
-      // Case 2: Create a new subfolder first
       console.log(
         `Creating new subfolder "${newFolderName}" inside parent folder: ${parentFolderName} (ID: ${parentFolderId})`
       );
@@ -362,13 +346,10 @@ async function performBookmarkOperation(
       bookmarkedTabs = await createBookmarksInFolder(
         selectedTabs,
         targetFolderId
-      ); // Capture returned tabs
-
+      );
       if (bookmarkedTabs.length > 0) {
         successMessage = `Successfully bookmarked ${bookmarkedTabs.length} tab(s) to new folder "${newFolderName}".`;
-        // Refresh the bookmark tree only if a new folder was successfully created and populated
         await renderBookmarkTree();
-        // Try to re-select the parent folder visually
         const parentDetails = bookmarkTreeContainer.querySelector(
           `.bookmark-folder[data-folder-id="${parentFolderId}"] > .folder-details`
         );
@@ -383,40 +364,32 @@ async function performBookmarkOperation(
           selectedFolderDisplay.style.fontStyle = "italic";
         }
       } else {
-        // Handle case where no valid tabs were bookmarked into the new folder
         setStatusMessage("No valid tabs were bookmarked.", true);
-        // Optionally, you might want to remove the newly created empty folder here
-        // await chrome.bookmarks.remove(targetFolderId);
         return { success: false, bookmarkedTabs: [] };
       }
     }
-
-    // --- Final Steps for Successful Bookmarking ---
-    setStatusMessage(successMessage); // Show success message immediately
-    newFolderNameInput.value = ""; // Clear the input field
-    deselectAllCheckboxes(); // Deselect tabs
-
-    return { success: true, bookmarkedTabs: bookmarkedTabs }; // Return success and the list
+    setStatusMessage(successMessage);
+    newFolderNameInput.value = "";
+    deselectAllCheckboxes(); // This now updates the count too
+    return { success: true, bookmarkedTabs: bookmarkedTabs };
   } catch (error) {
     console.error("Error during bookmark operation:", error);
     setStatusMessage(`Error creating bookmarks: ${error.message}`, true);
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
-    return { success: false, bookmarkedTabs: [] }; // Return failure
+    return { success: false, bookmarkedTabs: [] };
   }
 }
 
 // --- Button Action Functions ---
 
-// Function for the "Bookmark Selected" button
+// Function for the "Bookmark Selected" button (Same as before)
 async function handleBookmarkSelectedClick() {
   const selectedTabs = getSelectedTabs();
   const newFolderName = newFolderNameInput.value.trim();
   const parentFolderId = selectedFolderIdInput.value;
   const parentFolderName = selectedFolderDisplay.textContent;
-
-  // Basic validation
   if (selectedTabs.length === 0) {
     setStatusMessage("No tabs selected to bookmark.", true);
     return;
@@ -428,27 +401,21 @@ async function handleBookmarkSelectedClick() {
     );
     return;
   }
-
-  setStatusMessage("Bookmarking..."); // Initial status
-
-  // Call the core bookmarking logic, but we don't need the return value here
+  setStatusMessage("Bookmarking...");
   await performBookmarkOperation(
     selectedTabs,
     newFolderName,
     parentFolderId,
     parentFolderName
   );
-  // Status message is handled within performBookmarkOperation
 }
 
-// Function for the "Bookmark & Delete" button
+// Function for the "Bookmark & Delete" button (Same as before)
 async function handleBookmarkAndDeleteClick() {
   const selectedTabs = getSelectedTabs();
   const newFolderName = newFolderNameInput.value.trim();
   const parentFolderId = selectedFolderIdInput.value;
   const parentFolderName = selectedFolderDisplay.textContent;
-
-  // Basic validation
   if (selectedTabs.length === 0) {
     setStatusMessage("No tabs selected.", true);
     return;
@@ -460,38 +427,25 @@ async function handleBookmarkAndDeleteClick() {
     );
     return;
   }
-
-  setStatusMessage("Bookmarking..."); // Initial status
-
-  // Perform the bookmark operation and get the result
+  setStatusMessage("Bookmarking...");
   const bookmarkResult = await performBookmarkOperation(
     selectedTabs,
     newFolderName,
     parentFolderId,
     parentFolderName
   );
-
-  // If bookmarking was successful and returned bookmarked tabs, proceed to delete
   if (bookmarkResult.success && bookmarkResult.bookmarkedTabs.length > 0) {
-    setStatusMessage("Bookmark successful. Deleting tabs..."); // Update status
-
-    // Extract IDs of successfully bookmarked tabs
+    setStatusMessage("Bookmark successful. Deleting tabs...");
     const tabIdsToDelete = bookmarkResult.bookmarkedTabs.map((tab) => tab.id);
-
     console.log("Attempting to delete tabs:", tabIdsToDelete);
-
     try {
-      // Use the closeTab function which handles errors gracefully
-      // Close tabs one by one to handle potential individual errors better
       let closedCount = 0;
       for (const tabId of tabIdsToDelete) {
-        await closeTab(tabId); // closeTab already logs errors
+        await closeTab(tabId);
         closedCount++;
       }
-      // Final success message after deletion attempts
       setStatusMessage(`Bookmarked and closed ${closedCount} tab(s).`);
     } catch (error) {
-      // Catch errors from the loop itself, although closeTab should handle most
       console.error("Error during tab deletion process:", error);
       setStatusMessage(
         "Bookmarking succeeded, but error occurred during tab deletion.",
@@ -499,14 +453,11 @@ async function handleBookmarkAndDeleteClick() {
       );
     }
   } else if (!bookmarkResult.success) {
-    // If bookmarking failed, the error message is already set by performBookmarkOperation
     console.log("Bookmarking failed. Tabs will not be deleted.");
   } else {
-    // Bookmarking succeeded but no tabs were actually bookmarked (e.g., all invalid URLs)
     console.log(
       "Bookmarking reported success, but no tabs were bookmarked. No tabs to delete."
     );
-    // Status message already set by performBookmarkOperation
   }
 }
 
@@ -516,8 +467,6 @@ async function handleBookmarkAndDeleteClick() {
 function setStatusMessage(message, isError = false) {
   statusMessageElement.textContent = message;
   statusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
-  // Clear message only if it hasn't been overwritten by a newer message
-  // Use a slightly longer timeout for combined actions
   const timeout = message.includes("closed") ? 7000 : 5000;
   setTimeout(() => {
     if (statusMessageElement.textContent === message) {
@@ -536,7 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Listen for tab events (Same as before)
 chrome.tabs.onCreated.addListener(renderTabs);
-chrome.tabs.onRemoved.addListener(renderTabs); // This will refresh the list after deletion
+chrome.tabs.onRemoved.addListener(renderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url || changeInfo.title || changeInfo.status === "complete") {
     renderTabs();
@@ -554,18 +503,17 @@ chrome.bookmarks.onMoved.addListener(renderBookmarkTree);
 // Listener for the "Select All" checkbox (Same as before)
 selectAllCheckbox.addEventListener("change", handleSelectAllChange);
 
-// Listener for the "Bookmark Selected" button - Calls new handler
+// Listener for the "Bookmark Selected" button (Same as before)
 bookmarkSelectedBtn.addEventListener("click", handleBookmarkSelectedClick);
 
-// Listener for the "Bookmark & Delete" button - Calls new handler
+// Listener for the "Bookmark & Delete" button (Same as before)
 bookmarkDeleteBtn.addEventListener("click", handleBookmarkAndDeleteClick);
 
-// Optional: Enter key listener in folder name input triggers "Bookmark Selected"
+// Optional: Enter key listener (Same as before)
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
-    // Default action on Enter is just bookmarking, not deleting
     handleBookmarkSelectedClick();
   }
 });
 
-console.log("Sidebar script loaded (with Bookmark & Delete button).");
+console.log("Sidebar script loaded (with selected count display).");
