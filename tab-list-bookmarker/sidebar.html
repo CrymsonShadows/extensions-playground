@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tab Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="actions">
+            <h3>Bookmark Selected Tabs</h3>
+
+            <label for="new-folder-name">New Folder Name:</label>
+            <input type="text" id="new-folder-name" placeholder="Enter name for new folder" class="input-field">
+
+            <label for="parent-folder-select">Place New Folder Inside:</label>
+            <select id="parent-folder-select" class="input-field">
+                <option value="">Loading folders...</option>
+                </select>
+
+            <div class="button-group">
+                 <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
+                 <button id="deselect-all-btn" class="btn deselect-btn">Deselect All</button>
+            </div>
+
+            <p id="status-message" class="status-message"></p>
+        </div>
+
+        <h2>Current Tabs</h2>
+        <div id="tab-list" class="tab-list">
+            <p>Loading tabs...</p>
+        </div>
+    </div>
+
+    <script src="sidebar.js"></script>
+</body>
+</html>
