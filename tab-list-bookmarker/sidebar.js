@@ -231,7 +231,7 @@ function getSelectedTabs() {
     if (!isNaN(tabId)) {
       selectedTabs.push({
         id: tabId,
-        url: checkbox.dataset.tabUrl,
+        url: getSuspendedTabUrl(checkbox.dataset.tabUrl),
         title: checkbox.dataset.tabTitle,
       });
     } else {
@@ -357,6 +357,22 @@ function deselectAllCheckboxes() {
     groupCheckbox.indeterminate = false;
   });
   updateSelectAllCheckboxState();
+}
+
+// --- Get Suspended Tab URL ---
+function getSuspendedTabUrl(tabUrl) {
+  if (
+    !tabUrl.startsWith("chrome-extension://fiabciakcmgepblmdkmemdbbkilneeeh")
+  ) {
+    return tabUrl;
+  }
+  const originalTabUrl = new URL(tabUrl);
+  const urlParams = new URLSearchParams(originalTabUrl.search);
+  const extractedURL = urlParams.get("url");
+  console.log(
+    `Original URL: ${originalTabUrl}\nExtracted URL: ${extractedURL}`
+  );
+  return urlParams.get("url");
 }
 
 // --- Bookmarking --- (Code remains the same)
