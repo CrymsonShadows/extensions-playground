@@ -23,12 +23,10 @@ const moveToGroupBtn = document.getElementById("move-to-group-btn");
 const groupStatusMessageElement = document.getElementById(
   "group-status-message"
 );
-
-// --- NEW: Action Tab Elements ---
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 
-// Color maps and constants (Same as before)
+// Color maps and constants
 const groupColorMap = {
   grey: "#DADCE0",
   blue: "#89B4F8",
@@ -53,16 +51,15 @@ const groupBackgroundColorMap = {
 };
 const availableGroupColors = Object.keys(groupColorMap);
 
+// Storage key for checked tab URLs
+const CHECKED_TABS_STORAGE_KEY = "sidebarCheckedTabs";
+
 // --- Action Tab Switching Logic ---
 function handleTabClick(event) {
   const clickedButton = event.currentTarget;
   const targetPanelId = clickedButton.dataset.target;
-
-  // Remove active class from all buttons and panels
   tabButtons.forEach((btn) => btn.classList.remove("active"));
   tabPanels.forEach((panel) => panel.classList.remove("active"));
-
-  // Add active class to the clicked button and corresponding panel
   clickedButton.classList.add("active");
   const targetPanel = document.getElementById(targetPanelId);
   if (targetPanel) {
@@ -72,12 +69,64 @@ function handleTabClick(event) {
   }
 }
 
-// --- Tab Loading and Display --- (Code remains the same)
-function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
+// --- Storage Helper Functions ---
+async function getCheckedTabsFromStorage() {
+  try {
+    const result = await chrome.storage.local.get(CHECKED_TABS_STORAGE_KEY);
+    return result[CHECKED_TABS_STORAGE_KEY] || {};
+  } catch (error) {
+    console.error("Error getting checked tabs from storage:", error);
+    return {};
+  }
+}
+async function saveCheckedTabsToStorage(checkedTabs) {
+  try {
+    await chrome.storage.local.set({ [CHECKED_TABS_STORAGE_KEY]: checkedTabs });
+  } catch (error) {
+    console.error("Error saving checked tabs to storage:", error);
+  }
+}
+
+// --- Get Suspended Tab URL ---
+// Extracts the original URL if the tab is suspended by certain extensions
+function getSuspendedTabUrl(tabUrl) {
+  if (!tabUrl) return tabUrl; // Return null/undefined if no URL
+
+  // Check for common suspender extension patterns
+  // Example: The Great Suspender (fiabciakcmgepblmdkmemdbbkilneeeh)
+  if (tabUrl.startsWith("chrome-extension://") && tabUrl.includes("url=")) {
+    try {
+      const urlObject = new URL(tabUrl);
+      const params = new URLSearchParams(urlObject.search);
+      const originalUrl = params.get("url");
+      if (originalUrl) {
+        console.log(`Suspended URL detected. Original: ${originalUrl}`);
+        return originalUrl; // Return the extracted original URL
+      }
+    } catch (e) {
+      console.warn("Could not parse suspended URL:", tabUrl, e);
+      // Fall through to return original tabUrl if parsing fails
+    }
+  }
+  // If not identified as a known suspended URL pattern, return the original URL
+  return tabUrl;
+}
+
+// --- Tab Loading and Display ---
+
+// Helper function to create a single tab item element
+function createTabItemElement(
+  tab,
+  checkedTabsState,
+  isInGroup = false,
+  groupColorName = null
+) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
   listItem.dataset.tabId = tab.id;
   listItem.dataset.groupId = tab.groupId;
+
+  // Apply group background/border if applicable
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
@@ -85,27 +134,46 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   } else {
     listItem.style.paddingLeft = "15px";
   }
+
+  // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.dataset.tabId = tab.id;
   checkbox.dataset.groupId = tab.groupId;
+  // *** Store the potentially suspended URL initially ***
   checkbox.dataset.tabUrl = tab.url;
   checkbox.dataset.tabTitle = tab.title;
-  checkbox.addEventListener("change", updateSelectAllCheckboxState);
+
+  // *** Use the ORIGINAL URL for checking storage state ***
+  const originalUrl = getSuspendedTabUrl(tab.url);
+  if (originalUrl && checkedTabsState[originalUrl]) {
+    checkbox.checked = true;
+  }
+
+  checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
+
+  // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
+  // Use original URL for favicon fetching if possible, otherwise fallback
+  // Note: chrome://favicon/ may not work well with suspended URLs,
+  // so using tab.favIconUrl might be more reliable here.
   favicon.src = tab.favIconUrl || "icons/default_favicon.png";
   favicon.alt = "";
   favicon.onerror = () => {
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
+
+  // Title
   const title = document.createElement("span");
   title.className = "tab-title";
-  title.textContent = tab.title || tab.url;
-  title.title = tab.title || tab.url;
+  title.textContent = tab.title || originalUrl || tab.url; // Prefer original URL if title missing
+  title.title = tab.title || originalUrl || tab.url;
   listItem.appendChild(title);
+
+  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
   closeButton.innerHTML = "&times;";
@@ -115,9 +183,13 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
+
   return listItem;
 }
+
+// Function to render the list of tabs
 async function renderTabs() {
+  const checkedTabsState = await getCheckedTabsFromStorage();
   try {
     const [tabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
@@ -180,14 +252,16 @@ async function renderTabs() {
       tabListElement.appendChild(header);
       groupTabs.forEach((tab) => {
         tabListElement.appendChild(
-          createTabItemElement(tab, true, group.color)
+          createTabItemElement(tab, checkedTabsState, true, group.color)
         );
-      });
+      }); // Pass state
     });
     if (ungroupedTabs.length > 0) {
       ungroupedTabs.forEach((tab) => {
-        tabListElement.appendChild(createTabItemElement(tab, false, null));
-      });
+        tabListElement.appendChild(
+          createTabItemElement(tab, checkedTabsState, false, null)
+        );
+      }); // Pass state
     }
     updateSelectAllCheckboxState();
   } catch (error) {
@@ -202,7 +276,7 @@ async function renderTabs() {
   }
 }
 
-// --- Tab Actions --- (Code remains the same)
+// --- Tab Actions ---
 async function closeTab(tabId) {
   try {
     await chrome.tabs.remove(tabId);
@@ -221,6 +295,8 @@ async function closeTab(tabId) {
     }
   }
 }
+
+// UPDATED: Use original URL when collecting tabs for actions
 function getSelectedTabs() {
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
@@ -228,10 +304,11 @@ function getSelectedTabs() {
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
+    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL
     if (!isNaN(tabId)) {
       selectedTabs.push({
         id: tabId,
-        url: getSuspendedTabUrl(checkbox.dataset.tabUrl),
+        url: originalUrl, // Use the original URL here
         title: checkbox.dataset.tabTitle,
       });
     } else {
@@ -241,7 +318,35 @@ function getSelectedTabs() {
   return selectedTabs;
 }
 
-// --- Checkbox State Management --- (Code remains the same)
+// --- Checkbox State Management ---
+
+// UPDATED: Use original URL for storage key
+async function handleCheckboxChange(event) {
+  const checkbox = event.target;
+  const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL
+  const isChecked = checkbox.checked;
+
+  if (!originalUrl) {
+    // Check if we have a URL to store against
+    console.warn(
+      "Checkbox change ignored: No original URL found for tab ID",
+      checkbox.dataset.tabId
+    );
+    updateSelectAllCheckboxState(); // Still update parent states
+    return;
+  }
+
+  const checkedTabsState = await getCheckedTabsFromStorage();
+  if (isChecked) {
+    checkedTabsState[originalUrl] = true; // Use original URL as key
+  } else {
+    delete checkedTabsState[originalUrl]; // Use original URL as key
+  }
+  await saveCheckedTabsToStorage(checkedTabsState);
+  updateSelectAllCheckboxState();
+}
+
+// Listener for group checkboxes (No change needed here, relies on handleCheckboxChange)
 function handleGroupCheckboxChange(event) {
   const groupCheckbox = event.target;
   const groupId = groupCheckbox.dataset.groupId;
@@ -250,25 +355,33 @@ function handleGroupCheckboxChange(event) {
     `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
   );
   memberTabCheckboxes.forEach((tabCheckbox) => {
-    tabCheckbox.checked = isChecked;
+    if (tabCheckbox.checked !== isChecked) {
+      tabCheckbox.checked = isChecked;
+      tabCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   });
-  updateSelectAllCheckboxState();
 }
+
+// Function to handle the main "Select All" checkbox click (No change needed here, relies on handleCheckboxChange)
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   individualCheckboxes.forEach((checkbox) => {
-    checkbox.checked = isChecked;
+    if (checkbox.checked !== isChecked) {
+      checkbox.checked = isChecked;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
   });
   const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
   groupCheckboxes.forEach((groupCheckbox) => {
     groupCheckbox.checked = isChecked;
     groupCheckbox.indeterminate = false;
   });
-  updateSelectAllCheckboxState();
 }
+
+// Function to update parent checkboxes/counts based on DOM (No change needed here)
 function updateSelectAllCheckboxState() {
   const allTabCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
@@ -346,36 +459,65 @@ function updateSelectAllCheckboxState() {
     }
   }
 }
+
+// Function to deselect all checkboxes (No change needed here, relies on handleCheckboxChange)
 function deselectAllCheckboxes() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
-  checkboxes.forEach((checkbox) => (checkbox.checked = false));
+  checkboxes.forEach((checkbox) => {
+    if (checkbox.checked) {
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
   const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
   groupCheckboxes.forEach((groupCheckbox) => {
     groupCheckbox.checked = false;
     groupCheckbox.indeterminate = false;
   });
-  updateSelectAllCheckboxState();
 }
 
-// --- Get Suspended Tab URL ---
-function getSuspendedTabUrl(tabUrl) {
-  if (
-    !tabUrl.startsWith("chrome-extension://fiabciakcmgepblmdkmemdbbkilneeeh")
-  ) {
-    return tabUrl;
+// --- Bookmarking ---
+// UPDATED: createBookmarksInFolder now uses the URL passed in (which should be original)
+async function createBookmarksInFolder(tabs, targetFolderId) {
+  const successfullyBookmarkedTabs = [];
+  let createdCount = 0;
+  for (const tab of tabs) {
+    // tabs array now contains original URLs from getSelectedTabs
+    if (!tab.url || tab.url.startsWith("chrome://")) {
+      console.warn(
+        `Skipping invalid URL for bookmarking: ${tab.url || "Empty URL"}`
+      );
+      continue;
+    }
+    try {
+      await chrome.bookmarks.create({
+        parentId: targetFolderId,
+        title: tab.title || tab.url,
+        url: tab.url,
+      }); // Use the provided tab.url
+      successfullyBookmarkedTabs.push(tab);
+      createdCount++;
+    } catch (error) {
+      console.error(
+        `Error creating bookmark for tab ${tab.id} (${tab.title}):`,
+        error
+      );
+      if (chrome.runtime.lastError) {
+        console.error(
+          "Chrome runtime error:",
+          chrome.runtime.lastError.message
+        );
+      }
+    }
   }
-  const originalTabUrl = new URL(tabUrl);
-  const urlParams = new URLSearchParams(originalTabUrl.search);
-  const extractedURL = urlParams.get("url");
   console.log(
-    `Original URL: ${originalTabUrl}\nExtracted URL: ${extractedURL}`
+    `Attempted to bookmark ${tabs.length} tabs, successfully created ${createdCount} bookmarks.`
   );
-  return urlParams.get("url");
+  return successfullyBookmarkedTabs;
 }
-
-// --- Bookmarking --- (Code remains the same)
+// Other bookmarking functions remain the same
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
     if (!node.url) {
@@ -446,42 +588,6 @@ async function renderBookmarkTree() {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
   }
-}
-async function createBookmarksInFolder(tabs, targetFolderId) {
-  const successfullyBookmarkedTabs = [];
-  let createdCount = 0;
-  for (const tab of tabs) {
-    if (!tab.url || tab.url.startsWith("chrome://")) {
-      console.warn(
-        `Skipping invalid URL for bookmarking: ${tab.url || "Empty URL"}`
-      );
-      continue;
-    }
-    try {
-      await chrome.bookmarks.create({
-        parentId: targetFolderId,
-        title: tab.title || tab.url,
-        url: tab.url,
-      });
-      successfullyBookmarkedTabs.push(tab);
-      createdCount++;
-    } catch (error) {
-      console.error(
-        `Error creating bookmark for tab ${tab.id} (${tab.title}):`,
-        error
-      );
-      if (chrome.runtime.lastError) {
-        console.error(
-          "Chrome runtime error:",
-          chrome.runtime.lastError.message
-        );
-      }
-    }
-  }
-  console.log(
-    `Attempted to bookmark ${tabs.length} tabs, successfully created ${createdCount} bookmarks.`
-  );
-  return successfullyBookmarkedTabs;
 }
 async function performBookmarkOperation(
   selectedTabs,
@@ -762,7 +868,7 @@ async function handleMoveToGroupClick() {
   }
 }
 
-// --- Utility Functions --- (Code remains the same)
+// --- Utility Functions ---
 function setStatusMessage(message, isError = false) {
   statusMessageElement.textContent = message;
   statusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
@@ -790,14 +896,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderBookmarkTree();
   loadExistingGroups();
   populateNewGroupColors();
-
-  // Add event listeners for the new tab buttons
   tabButtons.forEach((button) => {
     button.addEventListener("click", handleTabClick);
   });
 });
-
-// Existing listeners...
 chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener(renderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -805,7 +907,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     changeInfo.url ||
     changeInfo.title ||
     changeInfo.status === "complete" ||
-    changeInfo.groupId !== undefined
+    changeInfo.groupId !== undefined ||
+    changeInfo.favIconUrl
   ) {
     renderTabs();
   }
@@ -840,4 +943,4 @@ newGroupNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (with action tabs).");
+console.log("Sidebar script loaded (using original URLs for state/actions).");

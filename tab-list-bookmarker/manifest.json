@@ -3,7 +3,14 @@
   "name": "Sidebar Tab Manager/Bookmarker",
   "version": "1.0",
   "description": "Lists tabs in the sidebar, allows closing and bookmarking selected tabs.",
-  "permissions": ["tabs", "bookmarks", "sidePanel", "favicon", "tabGroups"],
+  "permissions": [
+    "tabs",
+    "bookmarks",
+    "sidePanel",
+    "favicon",
+    "tabGroups",
+    "storage"
+  ],
   "side_panel": {
     "default_path": "sidebar.html"
   },
