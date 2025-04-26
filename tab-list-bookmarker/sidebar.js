@@ -51,8 +51,9 @@ const groupBackgroundColorMap = {
 };
 const availableGroupColors = Object.keys(groupColorMap);
 
-// Storage key for checked tab URLs
-const CHECKED_TABS_STORAGE_KEY = "sidebarCheckedTabs";
+// --- In-memory state for checked tabs ---
+// Uses a Set to store the tab IDs of currently checked tabs.
+let checkedTabIds = new Set();
 
 // --- Action Tab Switching Logic ---
 function handleTabClick(event) {
@@ -69,61 +70,30 @@ function handleTabClick(event) {
   }
 }
 
-// --- Storage Helper Functions ---
-async function getCheckedTabsFromStorage() {
-  try {
-    const result = await chrome.storage.local.get(CHECKED_TABS_STORAGE_KEY);
-    return result[CHECKED_TABS_STORAGE_KEY] || {};
-  } catch (error) {
-    console.error("Error getting checked tabs from storage:", error);
-    return {};
-  }
-}
-async function saveCheckedTabsToStorage(checkedTabs) {
-  try {
-    await chrome.storage.local.set({ [CHECKED_TABS_STORAGE_KEY]: checkedTabs });
-  } catch (error) {
-    console.error("Error saving checked tabs to storage:", error);
-  }
-}
-
-// --- Get Suspended Tab URL ---
-// Extracts the original URL if the tab is suspended by certain extensions
+// --- Get Suspended Tab URL --- (Still needed for bookmarking/display)
 function getSuspendedTabUrl(tabUrl) {
-  if (!tabUrl) return tabUrl; // Return null/undefined if no URL
-
-  // Check for common suspender extension patterns
-  // Example: The Great Suspender (fiabciakcmgepblmdkmemdbbkilneeeh)
+  if (!tabUrl) return tabUrl;
   if (tabUrl.startsWith("chrome-extension://") && tabUrl.includes("url=")) {
     try {
       const urlObject = new URL(tabUrl);
       const params = new URLSearchParams(urlObject.search);
       const originalUrl = params.get("url");
-      if (originalUrl) {
-        console.log(`Suspended URL detected. Original: ${originalUrl}`);
-        return originalUrl; // Return the extracted original URL
-      }
+      if (originalUrl) return originalUrl;
     } catch (e) {
       console.warn("Could not parse suspended URL:", tabUrl, e);
-      // Fall through to return original tabUrl if parsing fails
     }
   }
-  // If not identified as a known suspended URL pattern, return the original URL
   return tabUrl;
 }
 
 // --- Tab Loading and Display ---
 
 // Helper function to create a single tab item element
-function createTabItemElement(
-  tab,
-  checkedTabsState,
-  isInGroup = false,
-  groupColorName = null
-) {
+// UPDATED: Sets initial checked state based on checkedTabIds Set
+function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
-  listItem.dataset.tabId = tab.id;
+  listItem.dataset.tabId = tab.id; // Use tabId
   listItem.dataset.groupId = tab.groupId;
 
   // Apply group background/border if applicable
@@ -138,27 +108,22 @@ function createTabItemElement(
   // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
-  checkbox.dataset.tabId = tab.id;
+  checkbox.dataset.tabId = tab.id; // Store tabId
   checkbox.dataset.groupId = tab.groupId;
-  // *** Store the potentially suspended URL initially ***
+  // Store URL primarily for bookmarking/grouping actions now
   checkbox.dataset.tabUrl = tab.url;
   checkbox.dataset.tabTitle = tab.title;
 
-  // *** Use the ORIGINAL URL for checking storage state ***
-  const originalUrl = getSuspendedTabUrl(tab.url);
-  if (originalUrl && checkedTabsState[originalUrl]) {
-    checkbox.checked = true;
-  }
+  // *** Set initial checked state based on the in-memory Set ***
+  checkbox.checked = checkedTabIds.has(tab.id);
 
+  // *** Add listener to update the Set on change ***
   checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
 
   // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
-  // Use original URL for favicon fetching if possible, otherwise fallback
-  // Note: chrome://favicon/ may not work well with suspended URLs,
-  // so using tab.favIconUrl might be more reliable here.
   favicon.src = tab.favIconUrl || "icons/default_favicon.png";
   favicon.alt = "";
   favicon.onerror = () => {
@@ -169,8 +134,9 @@ function createTabItemElement(
   // Title
   const title = document.createElement("span");
   title.className = "tab-title";
-  title.textContent = tab.title || originalUrl || tab.url; // Prefer original URL if title missing
-  title.title = tab.title || originalUrl || tab.url;
+  const displayUrl = getSuspendedTabUrl(tab.url); // Get original URL for display if needed
+  title.textContent = tab.title || displayUrl || tab.url; // Prefer original URL if title missing
+  title.title = tab.title || displayUrl || tab.url; // Tooltip
   listItem.appendChild(title);
 
   // Close Button
@@ -188,22 +154,41 @@ function createTabItemElement(
 }
 
 // Function to render the list of tabs
+// UPDATED: Doesn't need to fetch storage state. Cleans up checkedTabIds Set.
 async function renderTabs() {
-  const checkedTabsState = await getCheckedTabsFromStorage();
+  // *** Clean up checkedTabIds Set before rendering ***
+  // Keep only the IDs that correspond to currently open tabs
+  try {
+    const openTabs = await chrome.tabs.query({
+      windowId: chrome.windows.WINDOW_ID_CURRENT,
+    });
+    const openTabIds = new Set(openTabs.map((tab) => tab.id));
+    // Filter the existing checkedTabIds Set
+    checkedTabIds = new Set(
+      [...checkedTabIds].filter((id) => openTabIds.has(id))
+    );
+  } catch (error) {
+    console.error("Error fetching open tabs for cleanup:", error);
+    // Continue rendering even if cleanup fails
+  }
+
   try {
     const [tabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
     ]);
-    tabListElement.innerHTML = "";
+    tabListElement.innerHTML = ""; // Clear existing list
+
     if (tabs.length === 0) {
       tabListElement.innerHTML = "<p>No tabs found.</p>";
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
+      checkedTabIds.clear(); // Clear the set if no tabs are open
       updateSelectAllCheckboxState();
       return;
     }
     selectAllCheckbox.disabled = false;
+
     const groupMap = new Map(groups.map((group) => [group.id, group]));
     const tabsByGroup = new Map();
     const ungroupedTabs = [];
@@ -220,6 +205,8 @@ async function renderTabs() {
         ungroupedTabs.push(tab);
       }
     });
+
+    // Render groups
     groups.forEach((group) => {
       const groupTabs = tabsByGroup.get(group.id);
       if (!groupTabs || groupTabs.length === 0) return;
@@ -250,19 +237,23 @@ async function renderTabs() {
       groupTitle.textContent = group.title || "Unnamed Group";
       header.appendChild(groupTitle);
       tabListElement.appendChild(header);
+      // Pass checkedTabsState (now empty, logic moved to createTabItemElement)
       groupTabs.forEach((tab) => {
         tabListElement.appendChild(
-          createTabItemElement(tab, checkedTabsState, true, group.color)
+          createTabItemElement(tab, true, group.color)
         );
-      }); // Pass state
+      });
     });
+
+    // Render ungrouped tabs
     if (ungroupedTabs.length > 0) {
+      // Pass checkedTabsState (now empty, logic moved to createTabItemElement)
       ungroupedTabs.forEach((tab) => {
-        tabListElement.appendChild(
-          createTabItemElement(tab, checkedTabsState, false, null)
-        );
-      }); // Pass state
+        tabListElement.appendChild(createTabItemElement(tab, false, null));
+      });
     }
+
+    // Update counts and parent checkboxes based on the newly rendered DOM and checkedTabIds Set
     updateSelectAllCheckboxState();
   } catch (error) {
     console.error("Error loading tabs/groups:", error);
@@ -278,8 +269,11 @@ async function renderTabs() {
 
 // --- Tab Actions ---
 async function closeTab(tabId) {
+  // *** Remove from checked set BEFORE closing ***
+  checkedTabIds.delete(tabId);
   try {
     await chrome.tabs.remove(tabId);
+    // renderTabs() will be called by the onRemoved listener
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
@@ -292,11 +286,13 @@ async function closeTab(tabId) {
       }
     } else {
       console.log(`Tab ${tabId} already closed.`);
+      // Ensure state is consistent even if close failed because tab was already gone
+      renderTabs();
     }
   }
 }
 
-// UPDATED: Use original URL when collecting tabs for actions
+// Use original URL when collecting tabs for actions (bookmarking/grouping)
 function getSelectedTabs() {
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
@@ -304,11 +300,11 @@ function getSelectedTabs() {
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
-    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL
+    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL for actions
     if (!isNaN(tabId)) {
       selectedTabs.push({
         id: tabId,
-        url: originalUrl, // Use the original URL here
+        url: originalUrl, // Use the original URL for actions
         title: checkbox.dataset.tabTitle,
       });
     } else {
@@ -320,33 +316,34 @@ function getSelectedTabs() {
 
 // --- Checkbox State Management ---
 
-// UPDATED: Use original URL for storage key
-async function handleCheckboxChange(event) {
+// UPDATED: Listener for individual tab checkbox changes to update the Set
+function handleCheckboxChange(event) {
   const checkbox = event.target;
-  const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL
+  const tabId = parseInt(checkbox.dataset.tabId, 10); // Get tabId
   const isChecked = checkbox.checked;
 
-  if (!originalUrl) {
-    // Check if we have a URL to store against
+  if (isNaN(tabId)) {
     console.warn(
-      "Checkbox change ignored: No original URL found for tab ID",
+      "Checkbox change ignored: Invalid tab ID",
       checkbox.dataset.tabId
     );
-    updateSelectAllCheckboxState(); // Still update parent states
+    updateSelectAllCheckboxState();
     return;
   }
 
-  const checkedTabsState = await getCheckedTabsFromStorage();
+  // Update the in-memory Set
   if (isChecked) {
-    checkedTabsState[originalUrl] = true; // Use original URL as key
+    checkedTabIds.add(tabId);
   } else {
-    delete checkedTabsState[originalUrl]; // Use original URL as key
+    checkedTabIds.delete(tabId);
   }
-  await saveCheckedTabsToStorage(checkedTabsState);
+  // console.log("Checked Tab IDs:", checkedTabIds); // For debugging
+
+  // Update parent checkboxes/counts based on the current DOM state
   updateSelectAllCheckboxState();
 }
 
-// Listener for group checkboxes (No change needed here, relies on handleCheckboxChange)
+// UPDATED: Listener for group checkboxes to update the Set
 function handleGroupCheckboxChange(event) {
   const groupCheckbox = event.target;
   const groupId = groupCheckbox.dataset.groupId;
@@ -354,43 +351,71 @@ function handleGroupCheckboxChange(event) {
   const memberTabCheckboxes = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
   );
+
   memberTabCheckboxes.forEach((tabCheckbox) => {
+    const tabId = parseInt(tabCheckbox.dataset.tabId, 10);
+    if (isNaN(tabId)) return;
+
+    // Update visual state only if needed
     if (tabCheckbox.checked !== isChecked) {
       tabCheckbox.checked = isChecked;
-      tabCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    // Update the Set directly
+    if (isChecked) {
+      checkedTabIds.add(tabId);
+    } else {
+      checkedTabIds.delete(tabId);
     }
   });
+  // Update parent states after modifying the Set
+  updateSelectAllCheckboxState();
 }
 
-// Function to handle the main "Select All" checkbox click (No change needed here, relies on handleCheckboxChange)
+// UPDATED: Function to handle the main "Select All" checkbox click to update the Set
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
+
   individualCheckboxes.forEach((checkbox) => {
+    const tabId = parseInt(checkbox.dataset.tabId, 10);
+    if (isNaN(tabId)) return;
+
+    // Update visual state only if needed
     if (checkbox.checked !== isChecked) {
       checkbox.checked = isChecked;
-      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    // Update the Set directly
+    if (isChecked) {
+      checkedTabIds.add(tabId);
+    } else {
+      checkedTabIds.delete(tabId);
     }
   });
+  // Also update group checkboxes visually
   const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
   groupCheckboxes.forEach((groupCheckbox) => {
     groupCheckbox.checked = isChecked;
     groupCheckbox.indeterminate = false;
   });
+
+  // Update parent states after modifying the Set
+  updateSelectAllCheckboxState();
 }
 
-// Function to update parent checkboxes/counts based on DOM (No change needed here)
+// Function to update parent checkboxes/counts based on DOM (Relies on accurate DOM state)
 function updateSelectAllCheckboxState() {
   const allTabCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   const totalTabs = allTabCheckboxes.length;
+  // Count selected based on the DOM after changes
   const totalSelectedTabs = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
   ).length;
   selectedCountSpan.textContent = `(${totalSelectedTabs})`;
+
   let allGroupsChecked = true;
   let noGroupsChecked = true;
   let anyGroupIndeterminate = false;
@@ -402,9 +427,11 @@ function updateSelectAllCheckboxState() {
       `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
     );
     const totalInGroup = memberTabCheckboxes.length;
+    // Count selected based on the DOM
     const selectedInGroup = tabListElement.querySelectorAll(
       `.tab-item input[type="checkbox"][data-group-id="${groupId}"]:checked`
     ).length;
+
     if (totalInGroup > 0) {
       if (selectedInGroup === totalInGroup) {
         groupCheckbox.checked = true;
@@ -427,16 +454,19 @@ function updateSelectAllCheckboxState() {
       groupCheckbox.disabled = true;
     }
   });
+
   const ungroupedCheckboxes = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]`
   );
   const totalUngrouped = ungroupedCheckboxes.length;
+  // Count selected based on the DOM
   const selectedUngrouped = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]:checked`
   ).length;
   let allUngroupedChecked =
     totalUngrouped > 0 && selectedUngrouped === totalUngrouped;
   let noUngroupedChecked = selectedUngrouped === 0;
+
   if (totalTabs === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
@@ -460,15 +490,19 @@ function updateSelectAllCheckboxState() {
   }
 }
 
-// Function to deselect all checkboxes (No change needed here, relies on handleCheckboxChange)
+// UPDATED: Function to deselect all checkboxes and update the Set
 function deselectAllCheckboxes() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   checkboxes.forEach((checkbox) => {
     if (checkbox.checked) {
+      // Only change if needed
+      const tabId = parseInt(checkbox.dataset.tabId, 10);
       checkbox.checked = false;
-      checkbox.dispatchEvent(new Event("change", { bubbles: true }));
+      if (!isNaN(tabId)) {
+        checkedTabIds.delete(tabId); // Remove from Set
+      }
     }
   });
   const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
@@ -476,15 +510,15 @@ function deselectAllCheckboxes() {
     groupCheckbox.checked = false;
     groupCheckbox.indeterminate = false;
   });
+
+  updateSelectAllCheckboxState(); // Update counts/parents
 }
 
-// --- Bookmarking ---
-// UPDATED: createBookmarksInFolder now uses the URL passed in (which should be original)
+// --- Bookmarking --- (No changes needed from previous version)
 async function createBookmarksInFolder(tabs, targetFolderId) {
   const successfullyBookmarkedTabs = [];
   let createdCount = 0;
   for (const tab of tabs) {
-    // tabs array now contains original URLs from getSelectedTabs
     if (!tab.url || tab.url.startsWith("chrome://")) {
       console.warn(
         `Skipping invalid URL for bookmarking: ${tab.url || "Empty URL"}`
@@ -496,7 +530,7 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
         parentId: targetFolderId,
         title: tab.title || tab.url,
         url: tab.url,
-      }); // Use the provided tab.url
+      });
       successfullyBookmarkedTabs.push(tab);
       createdCount++;
     } catch (error) {
@@ -517,7 +551,6 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
   );
   return successfullyBookmarkedTabs;
 }
-// Other bookmarking functions remain the same
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
     if (!node.url) {
@@ -738,7 +771,7 @@ async function handleBookmarkAndDeleteClick() {
   }
 }
 
-// --- Tab Grouping Logic --- (Code remains the same)
+// --- Tab Grouping Logic --- (No changes needed from previous version)
 async function loadExistingGroups() {
   try {
     const groups = await chrome.tabGroups.query({
@@ -901,7 +934,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 chrome.tabs.onCreated.addListener(renderTabs);
-chrome.tabs.onRemoved.addListener(renderTabs);
+// UPDATED: onRemoved listener now implicitly handles state via renderTabs cleanup
+chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+  // Optional: Explicitly remove from Set immediately, though renderTabs cleanup handles it too
+  checkedTabIds.delete(tabId);
+  renderTabs();
+});
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (
     changeInfo.url ||
@@ -943,4 +981,4 @@ newGroupNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (using original URLs for state/actions).");
+console.log("Sidebar script loaded (using tabId-based checkbox state).");
