@@ -52,7 +52,6 @@ const groupBackgroundColorMap = {
 const availableGroupColors = Object.keys(groupColorMap);
 
 // --- In-memory state for checked tabs ---
-// Uses a Set to store the tab IDs of currently checked tabs.
 let checkedTabIds = new Set();
 
 // --- Action Tab Switching Logic ---
@@ -70,7 +69,7 @@ function handleTabClick(event) {
   }
 }
 
-// --- Get Suspended Tab URL --- (Still needed for bookmarking/display)
+// --- Get Suspended Tab URL ---
 function getSuspendedTabUrl(tabUrl) {
   if (!tabUrl) return tabUrl;
   if (tabUrl.startsWith("chrome-extension://") && tabUrl.includes("url=")) {
@@ -87,16 +86,11 @@ function getSuspendedTabUrl(tabUrl) {
 }
 
 // --- Tab Loading and Display ---
-
-// Helper function to create a single tab item element
-// UPDATED: Sets initial checked state based on checkedTabIds Set
 function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
-  listItem.dataset.tabId = tab.id; // Use tabId
+  listItem.dataset.tabId = tab.id;
   listItem.dataset.groupId = tab.groupId;
-
-  // Apply group background/border if applicable
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
@@ -104,24 +98,15 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   } else {
     listItem.style.paddingLeft = "15px";
   }
-
-  // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
-  checkbox.dataset.tabId = tab.id; // Store tabId
+  checkbox.dataset.tabId = tab.id;
   checkbox.dataset.groupId = tab.groupId;
-  // Store URL primarily for bookmarking/grouping actions now
   checkbox.dataset.tabUrl = tab.url;
   checkbox.dataset.tabTitle = tab.title;
-
-  // *** Set initial checked state based on the in-memory Set ***
-  checkbox.checked = checkedTabIds.has(tab.id);
-
-  // *** Add listener to update the Set on change ***
+  checkbox.checked = checkedTabIds.has(tab.id); // Set state from Set
   checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
-
-  // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
   favicon.src = tab.favIconUrl || "icons/default_favicon.png";
@@ -130,16 +115,12 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
-
-  // Title
   const title = document.createElement("span");
   title.className = "tab-title";
-  const displayUrl = getSuspendedTabUrl(tab.url); // Get original URL for display if needed
-  title.textContent = tab.title || displayUrl || tab.url; // Prefer original URL if title missing
-  title.title = tab.title || displayUrl || tab.url; // Tooltip
+  const displayUrl = getSuspendedTabUrl(tab.url);
+  title.textContent = tab.title || displayUrl || tab.url;
+  title.title = tab.title || displayUrl || tab.url;
   listItem.appendChild(title);
-
-  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
   closeButton.innerHTML = "&times;";
@@ -149,46 +130,37 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
-
   return listItem;
 }
-
-// Function to render the list of tabs
-// UPDATED: Doesn't need to fetch storage state. Cleans up checkedTabIds Set.
 async function renderTabs() {
-  // *** Clean up checkedTabIds Set before rendering ***
-  // Keep only the IDs that correspond to currently open tabs
   try {
+    // Cleanup checkedTabIds Set
     const openTabs = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
     const openTabIds = new Set(openTabs.map((tab) => tab.id));
-    // Filter the existing checkedTabIds Set
     checkedTabIds = new Set(
       [...checkedTabIds].filter((id) => openTabIds.has(id))
     );
   } catch (error) {
     console.error("Error fetching open tabs for cleanup:", error);
-    // Continue rendering even if cleanup fails
   }
-
   try {
+    // Render list
     const [tabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
     ]);
-    tabListElement.innerHTML = ""; // Clear existing list
-
+    tabListElement.innerHTML = "";
     if (tabs.length === 0) {
       tabListElement.innerHTML = "<p>No tabs found.</p>";
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
-      checkedTabIds.clear(); // Clear the set if no tabs are open
+      checkedTabIds.clear();
       updateSelectAllCheckboxState();
       return;
     }
     selectAllCheckbox.disabled = false;
-
     const groupMap = new Map(groups.map((group) => [group.id, group]));
     const tabsByGroup = new Map();
     const ungroupedTabs = [];
@@ -205,8 +177,6 @@ async function renderTabs() {
         ungroupedTabs.push(tab);
       }
     });
-
-    // Render groups
     groups.forEach((group) => {
       const groupTabs = tabsByGroup.get(group.id);
       if (!groupTabs || groupTabs.length === 0) return;
@@ -237,23 +207,17 @@ async function renderTabs() {
       groupTitle.textContent = group.title || "Unnamed Group";
       header.appendChild(groupTitle);
       tabListElement.appendChild(header);
-      // Pass checkedTabsState (now empty, logic moved to createTabItemElement)
       groupTabs.forEach((tab) => {
         tabListElement.appendChild(
           createTabItemElement(tab, true, group.color)
         );
       });
     });
-
-    // Render ungrouped tabs
     if (ungroupedTabs.length > 0) {
-      // Pass checkedTabsState (now empty, logic moved to createTabItemElement)
       ungroupedTabs.forEach((tab) => {
         tabListElement.appendChild(createTabItemElement(tab, false, null));
       });
     }
-
-    // Update counts and parent checkboxes based on the newly rendered DOM and checkedTabIds Set
     updateSelectAllCheckboxState();
   } catch (error) {
     console.error("Error loading tabs/groups:", error);
@@ -269,11 +233,9 @@ async function renderTabs() {
 
 // --- Tab Actions ---
 async function closeTab(tabId) {
-  // *** Remove from checked set BEFORE closing ***
   checkedTabIds.delete(tabId);
   try {
     await chrome.tabs.remove(tabId);
-    // renderTabs() will be called by the onRemoved listener
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
@@ -286,13 +248,10 @@ async function closeTab(tabId) {
       }
     } else {
       console.log(`Tab ${tabId} already closed.`);
-      // Ensure state is consistent even if close failed because tab was already gone
       renderTabs();
     }
   }
 }
-
-// Use original URL when collecting tabs for actions (bookmarking/grouping)
 function getSelectedTabs() {
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
@@ -300,11 +259,11 @@ function getSelectedTabs() {
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
-    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl); // Get original URL for actions
+    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl);
     if (!isNaN(tabId)) {
       selectedTabs.push({
         id: tabId,
-        url: originalUrl, // Use the original URL for actions
+        url: originalUrl,
         title: checkbox.dataset.tabTitle,
       });
     } else {
@@ -315,13 +274,10 @@ function getSelectedTabs() {
 }
 
 // --- Checkbox State Management ---
-
-// UPDATED: Listener for individual tab checkbox changes to update the Set
 function handleCheckboxChange(event) {
   const checkbox = event.target;
-  const tabId = parseInt(checkbox.dataset.tabId, 10); // Get tabId
+  const tabId = parseInt(checkbox.dataset.tabId, 10);
   const isChecked = checkbox.checked;
-
   if (isNaN(tabId)) {
     console.warn(
       "Checkbox change ignored: Invalid tab ID",
@@ -330,20 +286,13 @@ function handleCheckboxChange(event) {
     updateSelectAllCheckboxState();
     return;
   }
-
-  // Update the in-memory Set
   if (isChecked) {
     checkedTabIds.add(tabId);
   } else {
     checkedTabIds.delete(tabId);
   }
-  // console.log("Checked Tab IDs:", checkedTabIds); // For debugging
-
-  // Update parent checkboxes/counts based on the current DOM state
   updateSelectAllCheckboxState();
 }
-
-// UPDATED: Listener for group checkboxes to update the Set
 function handleGroupCheckboxChange(event) {
   const groupCheckbox = event.target;
   const groupId = groupCheckbox.dataset.groupId;
@@ -351,71 +300,53 @@ function handleGroupCheckboxChange(event) {
   const memberTabCheckboxes = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
   );
-
   memberTabCheckboxes.forEach((tabCheckbox) => {
     const tabId = parseInt(tabCheckbox.dataset.tabId, 10);
     if (isNaN(tabId)) return;
-
-    // Update visual state only if needed
     if (tabCheckbox.checked !== isChecked) {
       tabCheckbox.checked = isChecked;
     }
-    // Update the Set directly
     if (isChecked) {
       checkedTabIds.add(tabId);
     } else {
       checkedTabIds.delete(tabId);
     }
   });
-  // Update parent states after modifying the Set
   updateSelectAllCheckboxState();
 }
-
-// UPDATED: Function to handle the main "Select All" checkbox click to update the Set
 function handleSelectAllChange() {
   const isChecked = selectAllCheckbox.checked;
   const individualCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
-
   individualCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
     if (isNaN(tabId)) return;
-
-    // Update visual state only if needed
     if (checkbox.checked !== isChecked) {
       checkbox.checked = isChecked;
     }
-    // Update the Set directly
     if (isChecked) {
       checkedTabIds.add(tabId);
     } else {
       checkedTabIds.delete(tabId);
     }
   });
-  // Also update group checkboxes visually
   const groupCheckboxes = tabListElement.querySelectorAll(".group-checkbox");
   groupCheckboxes.forEach((groupCheckbox) => {
     groupCheckbox.checked = isChecked;
     groupCheckbox.indeterminate = false;
   });
-
-  // Update parent states after modifying the Set
   updateSelectAllCheckboxState();
 }
-
-// Function to update parent checkboxes/counts based on DOM (Relies on accurate DOM state)
 function updateSelectAllCheckboxState() {
   const allTabCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   const totalTabs = allTabCheckboxes.length;
-  // Count selected based on the DOM after changes
   const totalSelectedTabs = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
   ).length;
   selectedCountSpan.textContent = `(${totalSelectedTabs})`;
-
   let allGroupsChecked = true;
   let noGroupsChecked = true;
   let anyGroupIndeterminate = false;
@@ -427,11 +358,9 @@ function updateSelectAllCheckboxState() {
       `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
     );
     const totalInGroup = memberTabCheckboxes.length;
-    // Count selected based on the DOM
     const selectedInGroup = tabListElement.querySelectorAll(
       `.tab-item input[type="checkbox"][data-group-id="${groupId}"]:checked`
     ).length;
-
     if (totalInGroup > 0) {
       if (selectedInGroup === totalInGroup) {
         groupCheckbox.checked = true;
@@ -454,19 +383,16 @@ function updateSelectAllCheckboxState() {
       groupCheckbox.disabled = true;
     }
   });
-
   const ungroupedCheckboxes = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]`
   );
   const totalUngrouped = ungroupedCheckboxes.length;
-  // Count selected based on the DOM
   const selectedUngrouped = tabListElement.querySelectorAll(
     `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]:checked`
   ).length;
   let allUngroupedChecked =
     totalUngrouped > 0 && selectedUngrouped === totalUngrouped;
   let noUngroupedChecked = selectedUngrouped === 0;
-
   if (totalTabs === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
@@ -489,19 +415,16 @@ function updateSelectAllCheckboxState() {
     }
   }
 }
-
-// UPDATED: Function to deselect all checkboxes and update the Set
 function deselectAllCheckboxes() {
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
   checkboxes.forEach((checkbox) => {
     if (checkbox.checked) {
-      // Only change if needed
       const tabId = parseInt(checkbox.dataset.tabId, 10);
       checkbox.checked = false;
       if (!isNaN(tabId)) {
-        checkedTabIds.delete(tabId); // Remove from Set
+        checkedTabIds.delete(tabId);
       }
     }
   });
@@ -510,11 +433,10 @@ function deselectAllCheckboxes() {
     groupCheckbox.checked = false;
     groupCheckbox.indeterminate = false;
   });
-
-  updateSelectAllCheckboxState(); // Update counts/parents
+  updateSelectAllCheckboxState();
 }
 
-// --- Bookmarking --- (No changes needed from previous version)
+// --- Bookmarking ---
 async function createBookmarksInFolder(tabs, targetFolderId) {
   const successfullyBookmarkedTabs = [];
   let createdCount = 0;
@@ -771,7 +693,7 @@ async function handleBookmarkAndDeleteClick() {
   }
 }
 
-// --- Tab Grouping Logic --- (No changes needed from previous version)
+// --- Tab Grouping Logic ---
 async function loadExistingGroups() {
   try {
     const groups = await chrome.tabGroups.query({
@@ -821,6 +743,8 @@ function handleTargetGroupChange() {
     newGroupOptionsDiv.classList.add("hidden");
   }
 }
+
+// CORRECTED group creation logic
 async function handleMoveToGroupClick() {
   const selectedTabs = getSelectedTabs();
   const targetGroupIdOrNew = targetGroupSelect.value;
@@ -839,31 +763,44 @@ async function handleMoveToGroupClick() {
   setGroupStatusMessage("Moving tabs...");
   try {
     if (targetGroupIdOrNew === "new") {
-      const createProperties = {};
-      const newName = newGroupNameInput.value.trim();
-      const newColor = newGroupColorSelect.value;
-      if (newName) {
-        createProperties.title = newName;
-      }
-      createProperties.color = newColor;
-      console.log(
-        "Creating new group with properties:",
-        createProperties,
-        "for tabs:",
-        tabIdsToMove
-      );
+      // --- Create a new group ---
+      console.log("Grouping tabs:", tabIdsToMove);
+      // Step 1: Group the tabs. This creates the group with default properties.
       const newGroupId = await chrome.tabs.group({
         tabIds: tabIdsToMove,
-        createProperties: createProperties,
       });
       console.log("Created new group with ID:", newGroupId);
+
+      // Step 2: Prepare properties to update (title and color)
+      const updateProperties = {};
+      const newName = newGroupNameInput.value.trim();
+      const newColor = newGroupColorSelect.value; // Color is always selected
+
+      if (newName) {
+        updateProperties.title = newName;
+      }
+      // Always include color from the dropdown
+      updateProperties.color = newColor;
+
+      // Step 3: Update the newly created group with title and color
+      if (Object.keys(updateProperties).length > 0) {
+        console.log(
+          "Updating group",
+          newGroupId,
+          "with properties:",
+          updateProperties
+        );
+        await chrome.tabGroups.update(newGroupId, updateProperties);
+      }
+
       setGroupStatusMessage(
         `Moved ${tabIdsToMove.length} tab(s) to new group ${
           newName || `(ID: ${newGroupId})`
         }.`
       );
-      newGroupNameInput.value = "";
+      newGroupNameInput.value = ""; // Clear input
     } else {
+      // --- Move to existing group ---
       const targetGroupId = parseInt(targetGroupIdOrNew, 10);
       if (isNaN(targetGroupId)) {
         setGroupStatusMessage("Invalid target group selected.", true);
@@ -872,6 +809,7 @@ async function handleMoveToGroupClick() {
       console.log(
         `Moving tabs ${tabIdsToMove} to existing group ID: ${targetGroupId}`
       );
+      // Group the tabs into the existing group ID
       await chrome.tabs.group({ tabIds: tabIdsToMove, groupId: targetGroupId });
       try {
         const groupInfo = await chrome.tabGroups.get(targetGroupId);
@@ -897,7 +835,7 @@ async function handleMoveToGroupClick() {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
     await renderTabs();
-    await loadExistingGroups();
+    await loadExistingGroups(); // Refresh lists even on error
   }
 }
 
@@ -934,12 +872,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 chrome.tabs.onCreated.addListener(renderTabs);
-// UPDATED: onRemoved listener now implicitly handles state via renderTabs cleanup
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-  // Optional: Explicitly remove from Set immediately, though renderTabs cleanup handles it too
   checkedTabIds.delete(tabId);
   renderTabs();
-});
+}); // Ensure removal from Set
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (
     changeInfo.url ||
