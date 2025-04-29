@@ -38,7 +38,7 @@
                      <label for="target-group-select">Target Group:</label>
                      <select id="target-group-select" class="input-field">
                          <option value="">Loading groups...</option>
-                         </select>
+                     </select>
 
                      <div id="new-group-options" class="new-group-options hidden">
                           <label for="new-group-name">New Group Name:</label>
@@ -48,8 +48,11 @@
                              </select>
                      </div>
 
-                     <button id="move-to-group-btn" class="btn group-btn">Move to Group</button>
-                     <p id="group-status-message" class="status-message"></p> </div>
+                     <button id="move-to-group-btn" class="btn group-btn">Move Selected to Group</button>
+                     <hr class="section-divider">
+                     <h3>Auto Group All Tabs</h3>
+                     <button id="group-by-domain-btn" class="btn auto-group-btn">Group Ungrouped by Domain</button> <button id="regroup-all-by-domain-btn" class="btn auto-group-btn">Regroup ALL by Domain</button> <p id="group-status-message" class="status-message"></p>
+                </div>
             </div>
         </div>
         <div class="tabs-header">

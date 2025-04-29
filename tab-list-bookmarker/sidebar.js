@@ -25,6 +25,11 @@ const groupStatusMessageElement = document.getElementById(
 );
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
+const groupByDomainBtn = document.getElementById("group-by-domain-btn");
+// NEW: Regroup All Button
+const regroupAllByDomainBtn = document.getElementById(
+  "regroup-all-by-domain-btn"
+);
 
 // Color maps and constants
 const groupColorMap = {
@@ -83,6 +88,33 @@ function getSuspendedTabUrl(tabUrl) {
     }
   }
   return tabUrl;
+}
+
+// --- Helper to extract SLD+TLD ---
+function getSldTld(hostname) {
+  if (
+    !hostname ||
+    !hostname.includes(".") ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
+  ) {
+    return null; // Skip IPs, localhost, single names
+  }
+  const parts = hostname.split(".");
+  if (parts.length >= 2) {
+    // Handle common multi-part TLDs (simple cases)
+    if (
+      parts.length > 2 &&
+      (parts[parts.length - 2] === "co" ||
+        parts[parts.length - 2] === "com" ||
+        parts[parts.length - 2] === "org" ||
+        parts[parts.length - 2] === "gov" ||
+        parts[parts.length - 2] === "ac")
+    ) {
+      return parts.slice(-3).join("."); // e.g., example.co.uk
+    }
+    return parts.slice(-2).join("."); // e.g., google.com
+  }
+  return hostname; // Fallback
 }
 
 // --- Tab Loading and Display ---
@@ -743,8 +775,6 @@ function handleTargetGroupChange() {
     newGroupOptionsDiv.classList.add("hidden");
   }
 }
-
-// CORRECTED group creation logic
 async function handleMoveToGroupClick() {
   const selectedTabs = getSelectedTabs();
   const targetGroupIdOrNew = targetGroupSelect.value;
@@ -763,26 +793,16 @@ async function handleMoveToGroupClick() {
   setGroupStatusMessage("Moving tabs...");
   try {
     if (targetGroupIdOrNew === "new") {
-      // --- Create a new group ---
       console.log("Grouping tabs:", tabIdsToMove);
-      // Step 1: Group the tabs. This creates the group with default properties.
-      const newGroupId = await chrome.tabs.group({
-        tabIds: tabIdsToMove,
-      });
+      const newGroupId = await chrome.tabs.group({ tabIds: tabIdsToMove });
       console.log("Created new group with ID:", newGroupId);
-
-      // Step 2: Prepare properties to update (title and color)
       const updateProperties = {};
       const newName = newGroupNameInput.value.trim();
-      const newColor = newGroupColorSelect.value; // Color is always selected
-
+      const newColor = newGroupColorSelect.value;
       if (newName) {
         updateProperties.title = newName;
       }
-      // Always include color from the dropdown
       updateProperties.color = newColor;
-
-      // Step 3: Update the newly created group with title and color
       if (Object.keys(updateProperties).length > 0) {
         console.log(
           "Updating group",
@@ -792,15 +812,13 @@ async function handleMoveToGroupClick() {
         );
         await chrome.tabGroups.update(newGroupId, updateProperties);
       }
-
       setGroupStatusMessage(
         `Moved ${tabIdsToMove.length} tab(s) to new group ${
           newName || `(ID: ${newGroupId})`
         }.`
       );
-      newGroupNameInput.value = ""; // Clear input
+      newGroupNameInput.value = "";
     } else {
-      // --- Move to existing group ---
       const targetGroupId = parseInt(targetGroupIdOrNew, 10);
       if (isNaN(targetGroupId)) {
         setGroupStatusMessage("Invalid target group selected.", true);
@@ -809,7 +827,6 @@ async function handleMoveToGroupClick() {
       console.log(
         `Moving tabs ${tabIdsToMove} to existing group ID: ${targetGroupId}`
       );
-      // Group the tabs into the existing group ID
       await chrome.tabs.group({ tabIds: tabIdsToMove, groupId: targetGroupId });
       try {
         const groupInfo = await chrome.tabGroups.get(targetGroupId);
@@ -835,7 +852,174 @@ async function handleMoveToGroupClick() {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
     await renderTabs();
-    await loadExistingGroups(); // Refresh lists even on error
+    await loadExistingGroups();
+  }
+}
+
+// --- Group by Domain Logic ---
+async function handleGroupByDomainClick() {
+  // Groups only UNGROUPED tabs
+  setGroupStatusMessage("Grouping ungrouped tabs by domain...");
+  try {
+    const tabs = await chrome.tabs.query({
+      windowId: chrome.windows.WINDOW_ID_CURRENT,
+    });
+    const domains = new Map(); // Map: domain -> [tabId, ...]
+    const ungroupedTabIds = []; // Keep track of tabs processed
+
+    // 1. Classify UNGROUPED tabs by domain
+    for (const tab of tabs) {
+      if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+        continue;
+      } // Skip already grouped
+      ungroupedTabIds.push(tab.id); // Track this tab
+
+      const originalUrl = getSuspendedTabUrl(tab.url);
+      if (!originalUrl || !originalUrl.startsWith("http")) {
+        continue;
+      }
+      try {
+        const hostname = new URL(originalUrl).hostname;
+        const domain = getSldTld(hostname);
+        if (domain) {
+          if (!domains.has(domain)) {
+            domains.set(domain, []);
+          }
+          domains.get(domain).push(tab.id);
+        }
+      } catch (e) {
+        console.warn(`Could not parse URL/get domain for: ${originalUrl}`, e);
+      }
+    }
+
+    // 2. Create groups for domains with multiple tabs
+    let groupsCreated = 0;
+    for (const [domainName, tabIds] of domains.entries()) {
+      if (tabIds.length > 1) {
+        // Only group if multiple tabs
+        try {
+          console.log(
+            `Grouping UNGROUPED tabs for domain ${domainName}:`,
+            tabIds
+          );
+          const newGroupId = await chrome.tabs.group({ tabIds: tabIds });
+          await chrome.tabGroups.update(newGroupId, { title: domainName });
+          groupsCreated++;
+        } catch (groupError) {
+          console.error(
+            `Error creating group for domain ${domainName}:`,
+            groupError
+          );
+          setGroupStatusMessage(
+            `Error grouping ${domainName}: ${groupError.message}`,
+            true
+          );
+        }
+      }
+    }
+
+    if (groupsCreated > 0) {
+      setGroupStatusMessage(
+        `Created ${groupsCreated} new group(s) for ungrouped tabs.`
+      );
+      await renderTabs();
+      await loadExistingGroups();
+    } else {
+      setGroupStatusMessage("No new groups needed for ungrouped tabs.");
+    }
+  } catch (error) {
+    console.error("Error grouping ungrouped tabs by domain:", error);
+    setGroupStatusMessage(`Error grouping by domain: ${error.message}`, true);
+    if (chrome.runtime.lastError) {
+      console.error("Chrome runtime error:", chrome.runtime.lastError.message);
+    }
+  }
+}
+
+// --- NEW: Regroup ALL by Domain Logic ---
+async function handleRegroupAllByDomainClick() {
+  setGroupStatusMessage("Regrouping ALL tabs by domain...");
+  try {
+    const tabs = await chrome.tabs.query({
+      windowId: chrome.windows.WINDOW_ID_CURRENT,
+    });
+    const domains = new Map(); // Map: domain -> [tabId, ...]
+    const allTabIdsToProcess = []; // All relevant tab IDs
+
+    // 1. Classify ALL tabs by domain
+    for (const tab of tabs) {
+      const originalUrl = getSuspendedTabUrl(tab.url);
+      if (!originalUrl || !originalUrl.startsWith("http")) {
+        continue;
+      } // Skip non-http
+
+      allTabIdsToProcess.push(tab.id); // Track all processed tabs
+
+      try {
+        const hostname = new URL(originalUrl).hostname;
+        const domain = getSldTld(hostname);
+        if (domain) {
+          if (!domains.has(domain)) {
+            domains.set(domain, []);
+          }
+          domains.get(domain).push(tab.id);
+        }
+      } catch (e) {
+        console.warn(`Could not parse URL/get domain for: ${originalUrl}`, e);
+      }
+    }
+
+    // 2. Ungroup all processed tabs first (to handle existing groups)
+    console.log("Ungrouping tabs before regrouping:", allTabIdsToProcess);
+    if (allTabIdsToProcess.length > 0) {
+      try {
+        await chrome.tabs.ungroup(allTabIdsToProcess);
+        console.log("Ungrouping successful.");
+        // Add a small delay to allow ungrouping to settle (optional, might help reliability)
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      } catch (ungroupError) {
+        // Ignore "Tabs are not in the same group" error which can happen if some were already ungrouped
+        if (!ungroupError.message.includes("tabs are not in the same group")) {
+          console.error("Error during ungrouping:", ungroupError);
+          // Decide if you want to stop or continue if ungrouping fails partially
+        } else {
+          console.log("Some tabs were already ungrouped.");
+        }
+      }
+    }
+
+    // 3. Create groups for domains with multiple tabs
+    let groupsCreated = 0;
+    for (const [domainName, tabIds] of domains.entries()) {
+      if (tabIds.length > 1) {
+        // Only group if multiple tabs
+        try {
+          console.log(`Regrouping tabs for domain ${domainName}:`, tabIds);
+          const newGroupId = await chrome.tabs.group({ tabIds: tabIds });
+          await chrome.tabGroups.update(newGroupId, { title: domainName });
+          groupsCreated++;
+        } catch (groupError) {
+          console.error(
+            `Error creating group for domain ${domainName}:`,
+            groupError
+          );
+          setGroupStatusMessage(
+            `Error grouping ${domainName}: ${groupError.message}`,
+            true
+          );
+        }
+      }
+    }
+
+    setGroupStatusMessage(`Regrouped tabs, created ${groupsCreated} group(s).`);
+    await renderTabs(); // Refresh the list to show new groups
+    await loadExistingGroups(); // Refresh the dropdown
+  } catch (error) {
+    console.error("Error regrouping all tabs by domain:", error);
+    setGroupStatusMessage(`Error regrouping all: ${error.message}`, true);
+    if (chrome.runtime.lastError) {
+      console.error("Chrome runtime error:", chrome.runtime.lastError.message);
+    }
   }
 }
 
@@ -875,7 +1059,7 @@ chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   checkedTabIds.delete(tabId);
   renderTabs();
-}); // Ensure removal from Set
+});
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (
     changeInfo.url ||
@@ -906,6 +1090,10 @@ bookmarkSelectedBtn.addEventListener("click", handleBookmarkSelectedClick);
 bookmarkDeleteBtn.addEventListener("click", handleBookmarkAndDeleteClick);
 targetGroupSelect.addEventListener("change", handleTargetGroupChange);
 moveToGroupBtn.addEventListener("click", handleMoveToGroupClick);
+groupByDomainBtn.addEventListener("click", handleGroupByDomainClick); // Listener for original button
+// NEW: Listener for Regroup All button
+regroupAllByDomainBtn.addEventListener("click", handleRegroupAllByDomainClick);
+
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
     handleBookmarkSelectedClick();
@@ -917,4 +1105,4 @@ newGroupNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (using tabId-based checkbox state).");
+console.log("Sidebar script loaded (with Regroup All by Domain).");
