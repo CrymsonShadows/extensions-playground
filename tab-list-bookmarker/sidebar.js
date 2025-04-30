@@ -26,7 +26,6 @@ const groupStatusMessageElement = document.getElementById(
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 const groupByDomainBtn = document.getElementById("group-by-domain-btn");
-// NEW: Regroup All Button
 const regroupAllByDomainBtn = document.getElementById(
   "regroup-all-by-domain-btn"
 );
@@ -74,20 +73,50 @@ function handleTabClick(event) {
   }
 }
 
-// --- Get Suspended Tab URL ---
-function getSuspendedTabUrl(tabUrl) {
-  if (!tabUrl) return tabUrl;
+// --- Get Original Tab Info (URL and Title) ---
+function getOriginalTabInfo(tabUrl, tabTitle) {
+  const result = {
+    url: tabUrl,
+    title: tabTitle,
+    isSuspended: false,
+    needsTitleFetch: false,
+  };
+  if (!tabUrl) return result;
   if (tabUrl.startsWith("chrome-extension://") && tabUrl.includes("url=")) {
     try {
       const urlObject = new URL(tabUrl);
       const params = new URLSearchParams(urlObject.search);
       const originalUrl = params.get("url");
-      if (originalUrl) return originalUrl;
+      const originalTitle = params.get("title");
+      if (originalUrl) {
+        result.url = originalUrl;
+        result.isSuspended = true;
+        if (originalTitle) {
+          result.title = originalTitle;
+        } else {
+          try {
+            const parsed = new URL(originalUrl);
+            result.title =
+              parsed.hostname +
+              (parsed.pathname === "/" ? "" : parsed.pathname);
+          } catch (urlParseError) {
+            console.warn(
+              "Could not parse original URL for fallback title:",
+              originalUrl,
+              urlParseError
+            );
+            result.title = originalUrl;
+          }
+          if (result.url.includes("x.com")) {
+            result.needsTitleFetch = true;
+          }
+        }
+      }
     } catch (e) {
       console.warn("Could not parse suspended URL:", tabUrl, e);
     }
   }
-  return tabUrl;
+  return result;
 }
 
 // --- Helper to extract SLD+TLD ---
@@ -97,11 +126,10 @@ function getSldTld(hostname) {
     !hostname.includes(".") ||
     /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)
   ) {
-    return null; // Skip IPs, localhost, single names
+    return null;
   }
   const parts = hostname.split(".");
   if (parts.length >= 2) {
-    // Handle common multi-part TLDs (simple cases)
     if (
       parts.length > 2 &&
       (parts[parts.length - 2] === "co" ||
@@ -110,19 +138,23 @@ function getSldTld(hostname) {
         parts[parts.length - 2] === "gov" ||
         parts[parts.length - 2] === "ac")
     ) {
-      return parts.slice(-3).join("."); // e.g., example.co.uk
+      return parts.slice(-3).join(".");
     }
-    return parts.slice(-2).join("."); // e.g., google.com
+    return parts.slice(-2).join(".");
   }
-  return hostname; // Fallback
+  return hostname;
 }
 
 // --- Tab Loading and Display ---
+// UPDATED: Fetch button appended before title span
 function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
   listItem.dataset.tabId = tab.id;
   listItem.dataset.groupId = tab.groupId;
+
+  const originalInfo = getOriginalTabInfo(tab.url, tab.title);
+
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
@@ -130,15 +162,17 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   } else {
     listItem.style.paddingLeft = "15px";
   }
+
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.dataset.tabId = tab.id;
   checkbox.dataset.groupId = tab.groupId;
-  checkbox.dataset.tabUrl = tab.url;
-  checkbox.dataset.tabTitle = tab.title;
-  checkbox.checked = checkedTabIds.has(tab.id); // Set state from Set
+  checkbox.dataset.tabUrl = originalInfo.url;
+  checkbox.dataset.tabTitle = originalInfo.title;
+  checkbox.checked = checkedTabIds.has(tab.id);
   checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
+
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
   favicon.src = tab.favIconUrl || "icons/default_favicon.png";
@@ -147,12 +181,33 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
+
+  // Title Container
+  const titleContainer = document.createElement("div");
+  titleContainer.className = "tab-title-container";
+
+  // *** NEW ORDER: Append Fetch Button FIRST if needed ***
+  if (originalInfo.needsTitleFetch) {
+    const fetchBtn = document.createElement("button");
+    fetchBtn.className = "fetch-title-btn";
+    fetchBtn.innerHTML = "🔄";
+    fetchBtn.title = "Load tab to get title";
+    fetchBtn.dataset.tabId = tab.id;
+    fetchBtn.dataset.originalUrl = originalInfo.url;
+    fetchBtn.addEventListener("click", handleFetchTitleClick);
+    titleContainer.appendChild(fetchBtn); // Append button first
+  }
+
+  // Append Title Span AFTER button (if button exists)
   const title = document.createElement("span");
   title.className = "tab-title";
-  const displayUrl = getSuspendedTabUrl(tab.url);
-  title.textContent = tab.title || displayUrl || tab.url;
-  title.title = tab.title || displayUrl || tab.url;
-  listItem.appendChild(title);
+  title.textContent = originalInfo.title || originalInfo.url;
+  title.title = originalInfo.title || originalInfo.url;
+  titleContainer.appendChild(title); // Append title span
+
+  listItem.appendChild(titleContainer); // Add the container
+
+  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
   closeButton.innerHTML = "&times;";
@@ -162,11 +217,12 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
+
   return listItem;
 }
+// Render Tabs (No change needed here)
 async function renderTabs() {
   try {
-    // Cleanup checkedTabIds Set
     const openTabs = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
@@ -178,7 +234,6 @@ async function renderTabs() {
     console.error("Error fetching open tabs for cleanup:", error);
   }
   try {
-    // Render list
     const [tabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
@@ -291,13 +346,10 @@ function getSelectedTabs() {
   const selectedTabs = [];
   selectedCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
-    const originalUrl = getSuspendedTabUrl(checkbox.dataset.tabUrl);
+    const originalUrl = checkbox.dataset.tabUrl;
+    const originalTitle = checkbox.dataset.tabTitle;
     if (!isNaN(tabId)) {
-      selectedTabs.push({
-        id: tabId,
-        url: originalUrl,
-        title: checkbox.dataset.tabTitle,
-      });
+      selectedTabs.push({ id: tabId, url: originalUrl, title: originalTitle });
     } else {
       console.warn("Skipping tab with invalid ID:", checkbox.dataset.tabId);
     }
@@ -864,22 +916,19 @@ async function handleGroupByDomainClick() {
     const tabs = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
-    const domains = new Map(); // Map: domain -> [tabId, ...]
-    const ungroupedTabIds = []; // Keep track of tabs processed
-
-    // 1. Classify UNGROUPED tabs by domain
+    const domains = new Map();
+    const ungroupedTabIds = [];
     for (const tab of tabs) {
       if (tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
         continue;
-      } // Skip already grouped
-      ungroupedTabIds.push(tab.id); // Track this tab
-
-      const originalUrl = getSuspendedTabUrl(tab.url);
-      if (!originalUrl || !originalUrl.startsWith("http")) {
+      }
+      ungroupedTabIds.push(tab.id);
+      const originalInfo = getOriginalTabInfo(tab.url, tab.title); // Use updated function
+      if (!originalInfo.url || !originalInfo.url.startsWith("http")) {
         continue;
       }
       try {
-        const hostname = new URL(originalUrl).hostname;
+        const hostname = new URL(originalInfo.url).hostname;
         const domain = getSldTld(hostname);
         if (domain) {
           if (!domains.has(domain)) {
@@ -888,15 +937,15 @@ async function handleGroupByDomainClick() {
           domains.get(domain).push(tab.id);
         }
       } catch (e) {
-        console.warn(`Could not parse URL/get domain for: ${originalUrl}`, e);
+        console.warn(
+          `Could not parse URL/get domain for: ${originalInfo.url}`,
+          e
+        );
       }
     }
-
-    // 2. Create groups for domains with multiple tabs
     let groupsCreated = 0;
     for (const [domainName, tabIds] of domains.entries()) {
       if (tabIds.length > 1) {
-        // Only group if multiple tabs
         try {
           console.log(
             `Grouping UNGROUPED tabs for domain ${domainName}:`,
@@ -917,7 +966,6 @@ async function handleGroupByDomainClick() {
         }
       }
     }
-
     if (groupsCreated > 0) {
       setGroupStatusMessage(
         `Created ${groupsCreated} new group(s) for ungrouped tabs.`
@@ -935,28 +983,22 @@ async function handleGroupByDomainClick() {
     }
   }
 }
-
-// --- NEW: Regroup ALL by Domain Logic ---
 async function handleRegroupAllByDomainClick() {
   setGroupStatusMessage("Regrouping ALL tabs by domain...");
   try {
     const tabs = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
-    const domains = new Map(); // Map: domain -> [tabId, ...]
-    const allTabIdsToProcess = []; // All relevant tab IDs
-
-    // 1. Classify ALL tabs by domain
+    const domains = new Map();
+    const allTabIdsToProcess = [];
     for (const tab of tabs) {
-      const originalUrl = getSuspendedTabUrl(tab.url);
-      if (!originalUrl || !originalUrl.startsWith("http")) {
+      const originalInfo = getOriginalTabInfo(tab.url, tab.title); // Use updated function
+      if (!originalInfo.url || !originalInfo.url.startsWith("http")) {
         continue;
-      } // Skip non-http
-
-      allTabIdsToProcess.push(tab.id); // Track all processed tabs
-
+      }
+      allTabIdsToProcess.push(tab.id);
       try {
-        const hostname = new URL(originalUrl).hostname;
+        const hostname = new URL(originalInfo.url).hostname;
         const domain = getSldTld(hostname);
         if (domain) {
           if (!domains.has(domain)) {
@@ -965,34 +1007,29 @@ async function handleRegroupAllByDomainClick() {
           domains.get(domain).push(tab.id);
         }
       } catch (e) {
-        console.warn(`Could not parse URL/get domain for: ${originalUrl}`, e);
+        console.warn(
+          `Could not parse URL/get domain for: ${originalInfo.url}`,
+          e
+        );
       }
     }
-
-    // 2. Ungroup all processed tabs first (to handle existing groups)
     console.log("Ungrouping tabs before regrouping:", allTabIdsToProcess);
     if (allTabIdsToProcess.length > 0) {
       try {
         await chrome.tabs.ungroup(allTabIdsToProcess);
         console.log("Ungrouping successful.");
-        // Add a small delay to allow ungrouping to settle (optional, might help reliability)
         await new Promise((resolve) => setTimeout(resolve, 100));
       } catch (ungroupError) {
-        // Ignore "Tabs are not in the same group" error which can happen if some were already ungrouped
         if (!ungroupError.message.includes("tabs are not in the same group")) {
           console.error("Error during ungrouping:", ungroupError);
-          // Decide if you want to stop or continue if ungrouping fails partially
         } else {
           console.log("Some tabs were already ungrouped.");
         }
       }
     }
-
-    // 3. Create groups for domains with multiple tabs
     let groupsCreated = 0;
     for (const [domainName, tabIds] of domains.entries()) {
       if (tabIds.length > 1) {
-        // Only group if multiple tabs
         try {
           console.log(`Regrouping tabs for domain ${domainName}:`, tabIds);
           const newGroupId = await chrome.tabs.group({ tabIds: tabIds });
@@ -1010,16 +1047,123 @@ async function handleRegroupAllByDomainClick() {
         }
       }
     }
-
     setGroupStatusMessage(`Regrouped tabs, created ${groupsCreated} group(s).`);
-    await renderTabs(); // Refresh the list to show new groups
-    await loadExistingGroups(); // Refresh the dropdown
+    await renderTabs();
+    await loadExistingGroups();
   } catch (error) {
     console.error("Error regrouping all tabs by domain:", error);
     setGroupStatusMessage(`Error regrouping all: ${error.message}`, true);
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
+  }
+}
+
+// --- Fetch Title Logic ---
+function waitForTabLoadComplete(tabId, targetUrl) {
+  return new Promise((resolve, reject) => {
+    const listener = (updatedTabId, changeInfo, tab) => {
+      if (updatedTabId === tabId) {
+        if (changeInfo.status === "complete" && tab.url === targetUrl) {
+          cleanupListener();
+          resolve(tab);
+        } else if (
+          changeInfo.status === "complete" &&
+          tab.url?.startsWith("chrome-extension://")
+        ) {
+          console.warn(
+            `Tab ${tabId} completed loading but ended on extension URL: ${tab.url}`
+          );
+          cleanupListener();
+          resolve(null);
+        }
+      }
+    };
+    const timeoutDuration = 15000;
+    let timeoutId = setTimeout(() => {
+      console.warn(
+        `Timeout waiting for tab ${tabId} (${targetUrl}) to complete loading.`
+      );
+      cleanupListener();
+      resolve(null);
+    }, timeoutDuration);
+    const cleanupListener = () => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      clearTimeout(timeoutId);
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId, (currentTab) => {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "Error getting initial tab info:",
+          chrome.runtime.lastError
+        );
+        cleanupListener();
+        reject(chrome.runtime.lastError);
+      } else if (
+        currentTab &&
+        currentTab.status === "complete" &&
+        currentTab.url === targetUrl
+      ) {
+        cleanupListener();
+        resolve(currentTab);
+      }
+    });
+  });
+}
+async function handleFetchTitleClick(event) {
+  const button = event.currentTarget;
+  const tabId = parseInt(button.dataset.tabId, 10);
+  const originalUrl = button.dataset.originalUrl;
+  if (isNaN(tabId) || !originalUrl) {
+    console.error("Missing tabId or originalUrl for fetch title button.");
+    return;
+  }
+  button.innerHTML = "...";
+  button.disabled = true;
+  button.classList.add("loading");
+  console.log(`Attempting to unsuspend tab ${tabId} to URL: ${originalUrl}`);
+  try {
+    await chrome.tabs.update(tabId, { active: true, url: originalUrl });
+    const finalTab = await waitForTabLoadComplete(tabId, originalUrl);
+    if (finalTab && finalTab.title && finalTab.url === originalUrl) {
+      console.log(
+        `Successfully fetched title for tab ${tabId}: ${finalTab.title}`
+      );
+      const listItem = tabListElement.querySelector(
+        `.tab-item[data-tab-id="${tabId}"]`
+      );
+      if (listItem) {
+        const titleSpan = listItem.querySelector(".tab-title");
+        const checkbox = listItem.querySelector('input[type="checkbox"]');
+        if (titleSpan) {
+          titleSpan.textContent = finalTab.title;
+          titleSpan.title = finalTab.title;
+        }
+        if (checkbox) {
+          checkbox.dataset.tabTitle = finalTab.title;
+        }
+        button.remove();
+      }
+    } else {
+      console.warn(
+        `Failed to fetch title for tab ${tabId}. Tab status:`,
+        finalTab?.status,
+        "URL:",
+        finalTab?.url
+      );
+      button.innerHTML = "❓";
+      button.title = "Failed to load title. Click to retry.";
+      button.disabled = false;
+      button.classList.remove("loading");
+    }
+  } catch (error) {
+    console.error(`Error unsuspending/fetching title for tab ${tabId}:`, error);
+    setGroupStatusMessage(`Error loading title for tab ${tabId}.`, true);
+    button.innerHTML = "🔄";
+    button.title = "Error loading title. Click to retry.";
+    button.disabled = false;
+    button.classList.remove("loading");
   }
 }
 
@@ -1090,10 +1234,8 @@ bookmarkSelectedBtn.addEventListener("click", handleBookmarkSelectedClick);
 bookmarkDeleteBtn.addEventListener("click", handleBookmarkAndDeleteClick);
 targetGroupSelect.addEventListener("change", handleTargetGroupChange);
 moveToGroupBtn.addEventListener("click", handleMoveToGroupClick);
-groupByDomainBtn.addEventListener("click", handleGroupByDomainClick); // Listener for original button
-// NEW: Listener for Regroup All button
+groupByDomainBtn.addEventListener("click", handleGroupByDomainClick);
 regroupAllByDomainBtn.addEventListener("click", handleRegroupAllByDomainClick);
-
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
     handleBookmarkSelectedClick();
@@ -1105,4 +1247,4 @@ newGroupNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (with Regroup All by Domain).");
+console.log("Sidebar script loaded (with URL fallback title).");
