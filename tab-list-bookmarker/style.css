@@ -19,6 +19,11 @@ body {
   overflow: hidden;
 }
 
+/* NEW: Helper class to hide elements */
+.hidden {
+  display: none !important;
+}
+
 h2,
 h3 {
   color: #1a1a1a;
@@ -221,7 +226,7 @@ h3 {
   background: none;
   border: none;
   padding: 0 4px;
-  margin-right: 4px; /* Button before title now */
+  margin-right: 4px;
   cursor: pointer;
   font-size: 0.9em;
   color: #555;
@@ -424,20 +429,21 @@ hr.section-divider {
   color: white;
   width: 100%;
   margin-top: 5px;
+  margin-bottom: 5px; /* Add bottom margin */
 }
 .auto-group-btn:hover {
   background-color: #5a6268;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* --- NEW: Stash Panel Styling --- */
+/* --- Stash Panel Styling --- */
 .stash-actions {
   margin-bottom: 10px;
 }
 .stash-btn {
   background-color: #7a6ff0;
   color: white;
-} /* Purple-ish */
+}
 .stash-btn:hover {
   background-color: #6155cc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -445,7 +451,7 @@ hr.section-divider {
 .consumed-btn {
   background-color: #f0ad4e;
   color: white;
-} /* Orange */
+}
 .consumed-btn:hover {
   background-color: #ec971f;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -453,18 +459,28 @@ hr.section-divider {
 
 .stash-controls {
   display: flex;
+  flex-wrap: wrap; /* Allow wrapping on small screens */
   gap: 10px;
   margin-bottom: 10px;
 }
+/* Adjust widths for filter, search, sort */
+.stash-filter-select {
+  min-width: 120px; /* Adjust as needed */
+  flex-basis: 120px; /* Base width */
+  flex-grow: 1; /* Allow growing slightly */
+}
 #stash-search {
-  flex-grow: 1;
-} /* Allow search to take more space */
-#stash-sort {
+  flex-grow: 10; /* Allow search to take more space */
+  min-width: 100px; /* Minimum search width */
+}
+.stash-sort-select {
   min-width: 150px;
-} /* Give sort dropdown a reasonable width */
+  flex-basis: 150px;
+  flex-grow: 1;
+}
 
 .stash-list {
-  max-height: 250px; /* Limit height */
+  max-height: 250px;
   overflow-y: auto;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -481,12 +497,34 @@ hr.section-divider {
   border-bottom: none;
 }
 
+.stash-item-status {
+  flex-shrink: 0;
+  font-size: 0.8em;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+.stash-item-status.consumed {
+  background-color: #e6f4ea;
+  color: #137333;
+}
+.stash-item-status.unread {
+  background-color: #e8f0fe;
+  color: #1967d2;
+}
+.stash-item-status.consumed + .stash-item-info .stash-item-title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.stash-item-status.consumed + .stash-item-info .stash-item-title:hover {
+  text-decoration: line-through underline;
+}
+
 .stash-item-info {
   flex-grow: 1;
-  overflow: hidden; /* Prevent long text overflow */
+  overflow: hidden;
 }
 .stash-item-title {
-  display: block; /* Title on its own line */
+  display: block;
   font-weight: bold;
   white-space: nowrap;
   overflow: hidden;
@@ -494,6 +532,11 @@ hr.section-divider {
   font-size: 0.9em;
   margin-bottom: 2px;
   color: #333;
+  text-decoration: none;
+}
+.stash-item-title:hover {
+  text-decoration: underline;
+  color: #1a73e8;
 }
 .stash-item-url {
   display: block;
@@ -503,43 +546,24 @@ hr.section-divider {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* NEW: Stash Count Styling */
+.stash-item-count {
+  font-size: 0.75em;
+  color: #888;
+  background-color: #eee;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-left: 4px; /* Space before count */
+}
+
 .stash-item-date {
   font-size: 0.75em;
   color: #888;
-  flex-shrink: 0; /* Prevent date from shrinking */
-  text-align: right;
-}
-.stash-item-status {
   flex-shrink: 0;
-  font-size: 0.8em;
-  padding: 2px 5px;
-  border-radius: 3px;
-}
-.stash-item-status.consumed {
-  background-color: #e6f4ea; /* Light green */
-  color: #137333; /* Darker green */
-  text-decoration: line-through; /* Strikethrough consumed items */
-}
-.stash-item-status.unread {
-  background-color: #e8f0fe; /* Light blue */
-  color: #1967d2; /* Darker blue */
-}
-/* Adjust title style if consumed */
-.stash-item-status.consumed + .stash-item-info .stash-item-title {
-  text-decoration: line-through;
-  opacity: 0.7;
-}
-.stash-item-actions button {
-  /* Style potential future action buttons */
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 4px;
-  font-size: 0.9em;
-  color: #666;
-}
-.stash-item-actions button:hover {
-  color: #333;
+  text-align: right;
+  margin-left: auto; /* Push date to the right */
 }
 
 /* Status message styling (shared) */

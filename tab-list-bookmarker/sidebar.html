@@ -13,7 +13,8 @@
             <div class="tab-buttons">
                 <button class="tab-btn active" data-target="bookmark-settings">Bookmark</button>
                 <button class="tab-btn" data-target="group-settings">Group Tabs</button>
-                <button class="tab-btn" data-target="stash-settings">Stash</button> </div>
+                <button class="tab-btn" data-target="stash-settings">Stash</button>
+            </div>
 
             <div class="tab-content">
                 <div id="bookmark-settings" class="tab-panel active">
@@ -30,8 +31,7 @@
                          <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
                          <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
                     </div>
-                    <p id="status-message" class="status-message"></p>
-                </div>
+                    <p id="status-message" class="status-message"></p> </div>
 
                 <div id="group-settings" class="tab-panel">
                      <h3>Move Selected Tabs to Group</h3>
@@ -53,8 +53,7 @@
                      <h3>Auto Group All Tabs</h3>
                      <button id="group-by-domain-btn" class="btn auto-group-btn">Group Ungrouped by Domain</button>
                      <button id="regroup-all-by-domain-btn" class="btn auto-group-btn">Regroup ALL by Domain</button>
-                     <p id="group-status-message" class="status-message"></p>
-                </div>
+                     <p id="group-status-message" class="status-message"></p> </div>
 
                 <div id="stash-settings" class="tab-panel">
                     <h3>Stash / Read Later</h3>
@@ -62,14 +61,16 @@
                         <button id="stash-current-tab-btn" class="btn stash-btn">Stash Current Tab</button>
                         <button id="mark-consumed-btn" class="btn consumed-btn">Mark Current as Consumed</button>
                     </div>
-                    <p id="stash-status-message" class="status-message"></p>
-
-                    <hr class="section-divider">
+                    <p id="stash-status-message" class="status-message"></p> <hr class="section-divider">
 
                     <h3>Stashed Items</h3>
                     <div class="stash-controls">
+                        <select id="stash-filter" class="input-field stash-filter-select">
+                            <option value="all">Show All</option>
+                            <option value="unread">Show Unread Only</option>
+                        </select>
                         <input type="search" id="stash-search" placeholder="Search stash..." class="input-field">
-                        <select id="stash-sort" class="input-field">
+                        <select id="stash-sort" class="input-field stash-sort-select">
                             <option value="dateDesc">Date Stashed (Newest)</option>
                             <option value="dateAsc">Date Stashed (Oldest)</option>
                             <option value="titleAsc">Title (A-Z)</option>
@@ -80,7 +81,7 @@
                     </div>
                     <div id="stash-list" class="stash-list">
                         <p>Loading stashed items...</p>
-                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -96,6 +97,7 @@
         </div>
     </div>
 
-    <script src="sidebar.js"></script>
+    <script type="module" src="sidebar.js"></script>
 </body>
 </html>
+
