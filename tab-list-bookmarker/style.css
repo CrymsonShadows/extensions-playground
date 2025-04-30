@@ -24,7 +24,6 @@ h3 {
   color: #1a1a1a;
   margin-top: 10px;
   margin-bottom: 8px;
-  /* Removed border-bottom here, will add to panels */
   padding-bottom: 5px;
   flex-shrink: 0;
 }
@@ -204,14 +203,51 @@ h3 {
   flex-shrink: 0;
   vertical-align: middle;
 }
-.tab-title {
+.tab-title-container {
+  display: flex;
+  align-items: center;
   flex-grow: 1;
+  overflow: hidden;
+  margin-right: 8px;
+}
+.tab-title {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.9em;
-  margin-right: 8px;
   cursor: default;
+}
+.fetch-title-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  margin-right: 4px; /* Button before title now */
+  cursor: pointer;
+  font-size: 0.9em;
+  color: #555;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fetch-title-btn:hover {
+  color: #1a73e8;
+}
+.fetch-title-btn.loading::after {
+  content: "...";
+  display: inline-block;
+  animation: loadingDots 1s infinite steps(3, end);
+}
+@keyframes loadingDots {
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
+  }
 }
 .close-tab-btn {
   background: none;
@@ -378,24 +414,132 @@ select.input-field {
   padding-right: 30px;
   cursor: pointer;
 }
-
-/* NEW: Divider style */
 hr.section-divider {
   border: none;
   border-top: 1px solid #ccc;
-  margin: 15px 0; /* Add some vertical space */
+  margin: 15px 0;
 }
-
-/* NEW: Auto Group Button Style */
 .auto-group-btn {
-  background-color: #6c757d; /* Secondary/grey color */
+  background-color: #6c757d;
   color: white;
-  width: 100%; /* Make button full width */
+  width: 100%;
   margin-top: 5px;
 }
 .auto-group-btn:hover {
   background-color: #5a6268;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* --- NEW: Stash Panel Styling --- */
+.stash-actions {
+  margin-bottom: 10px;
+}
+.stash-btn {
+  background-color: #7a6ff0;
+  color: white;
+} /* Purple-ish */
+.stash-btn:hover {
+  background-color: #6155cc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.consumed-btn {
+  background-color: #f0ad4e;
+  color: white;
+} /* Orange */
+.consumed-btn:hover {
+  background-color: #ec971f;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.stash-controls {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+#stash-search {
+  flex-grow: 1;
+} /* Allow search to take more space */
+#stash-sort {
+  min-width: 150px;
+} /* Give sort dropdown a reasonable width */
+
+.stash-list {
+  max-height: 250px; /* Limit height */
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+}
+.stash-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  gap: 8px; /* Space between elements */
+}
+.stash-item:last-child {
+  border-bottom: none;
+}
+
+.stash-item-info {
+  flex-grow: 1;
+  overflow: hidden; /* Prevent long text overflow */
+}
+.stash-item-title {
+  display: block; /* Title on its own line */
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  margin-bottom: 2px;
+  color: #333;
+}
+.stash-item-url {
+  display: block;
+  font-size: 0.8em;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stash-item-date {
+  font-size: 0.75em;
+  color: #888;
+  flex-shrink: 0; /* Prevent date from shrinking */
+  text-align: right;
+}
+.stash-item-status {
+  flex-shrink: 0;
+  font-size: 0.8em;
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+.stash-item-status.consumed {
+  background-color: #e6f4ea; /* Light green */
+  color: #137333; /* Darker green */
+  text-decoration: line-through; /* Strikethrough consumed items */
+}
+.stash-item-status.unread {
+  background-color: #e8f0fe; /* Light blue */
+  color: #1967d2; /* Darker blue */
+}
+/* Adjust title style if consumed */
+.stash-item-status.consumed + .stash-item-info .stash-item-title {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+.stash-item-actions button {
+  /* Style potential future action buttons */
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.9em;
+  color: #666;
+}
+.stash-item-actions button:hover {
+  color: #333;
 }
 
 /* Status message styling (shared) */

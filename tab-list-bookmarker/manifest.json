@@ -1,15 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Sidebar Tab Manager/Bookmarker",
-  "version": "1.0",
-  "description": "Lists tabs in the sidebar, allows closing and bookmarking selected tabs.",
+  "name": "Sidebar Tab Manager",
+  "version": "1.1",
+  "description": "Lists tabs, allows closing, bookmarking, grouping, and stashing.",
   "permissions": [
     "tabs",
     "bookmarks",
     "sidePanel",
     "favicon",
     "tabGroups",
-    "storage"
+    "storage",
+    "contextMenus",
+    "scripting"
   ],
   "side_panel": {
     "default_path": "sidebar.html"

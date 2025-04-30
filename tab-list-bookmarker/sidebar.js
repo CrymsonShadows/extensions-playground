@@ -12,7 +12,7 @@ const selectedFolderDisplay = document.getElementById(
 );
 const selectedFolderIdInput = document.getElementById("selected-folder-id");
 const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
-const statusMessageElement = document.getElementById("status-message");
+const statusMessageElement = document.getElementById("status-message"); // Bookmark status
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const selectedCountSpan = document.getElementById("selected-count");
 const targetGroupSelect = document.getElementById("target-group-select");
@@ -22,13 +22,23 @@ const newGroupColorSelect = document.getElementById("new-group-color");
 const moveToGroupBtn = document.getElementById("move-to-group-btn");
 const groupStatusMessageElement = document.getElementById(
   "group-status-message"
-);
+); // Grouping status
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
 const groupByDomainBtn = document.getElementById("group-by-domain-btn");
 const regroupAllByDomainBtn = document.getElementById(
   "regroup-all-by-domain-btn"
 );
+
+// --- NEW: Stash Panel Elements ---
+const stashCurrentTabBtn = document.getElementById("stash-current-tab-btn");
+const markConsumedBtn = document.getElementById("mark-consumed-btn");
+const stashStatusMessageElement = document.getElementById(
+  "stash-status-message"
+); // Stash status
+const stashSearchInput = document.getElementById("stash-search");
+const stashSortSelect = document.getElementById("stash-sort");
+const stashListElement = document.getElementById("stash-list");
 
 // Color maps and constants
 const groupColorMap = {
@@ -57,6 +67,121 @@ const availableGroupColors = Object.keys(groupColorMap);
 
 // --- In-memory state for checked tabs ---
 let checkedTabIds = new Set();
+
+// --- IndexedDB Constants ---
+const DB_NAME = "TabStashDB";
+const DB_VERSION = 1;
+const STORE_NAME = "stashedTabs";
+const URL_INDEX = "urlIndex";
+const DATE_INDEX = "dateCreatedIndex";
+const CONSUMED_INDEX = "consumedIndex";
+const TITLE_INDEX = "titleIndex";
+
+// --- IndexedDB Helper Functions ---
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = (event) => reject("IndexedDB error: " + request.error);
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        store.createIndex(URL_INDEX, "url", { unique: false });
+        store.createIndex(DATE_INDEX, "dateCreated", { unique: false });
+        store.createIndex(CONSUMED_INDEX, "consumed", { unique: false });
+        store.createIndex(TITLE_INDEX, "title", { unique: false });
+      }
+    };
+  });
+}
+
+async function addStashItemDB(item) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.add(item);
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) => reject("Error adding item: " + request.error);
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+async function getAllStashItemsDB() {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = (event) => resolve(event.target.result);
+    request.onerror = (event) =>
+      reject("Error getting all items: " + request.error);
+    transaction.oncomplete = () => db.close();
+  });
+}
+
+async function updateStashItemConsumedDB(urlToMark, consumedStatus) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const index = store.index(URL_INDEX);
+    const request = index.getAll(urlToMark); // Find all items with this URL
+
+    request.onerror = (event) =>
+      reject("Error querying stash: " + request.error);
+
+    request.onsuccess = (event) => {
+      const results = event.target.result;
+      if (!results || results.length === 0) {
+        resolve(0); // No items found
+        return;
+      }
+
+      let updatedCount = 0;
+      let itemsToUpdate = results.filter(
+        (item) => item.consumed !== consumedStatus
+      ).length; // Count how many actually need updating
+
+      if (itemsToUpdate === 0) {
+        resolve(0); // Nothing needed updating
+        return;
+      }
+
+      results.forEach((item) => {
+        if (item.consumed !== consumedStatus) {
+          // Only update if status is different
+          item.consumed = consumedStatus;
+          if (consumedStatus) {
+            item.dateConsumed = new Date().toISOString(); // Optional
+          } else {
+            delete item.dateConsumed; // Optional: remove if marked unread
+          }
+          const putRequest = store.put(item);
+          putRequest.onsuccess = () => {
+            updatedCount++;
+            if (updatedCount === itemsToUpdate) {
+              resolve(updatedCount); // Resolve when all necessary updates are done
+            }
+          };
+          putRequest.onerror = (err) => {
+            console.error("Error updating item:", item.id, putRequest.error);
+            itemsToUpdate--; // Decrement count even on error
+            if (updatedCount === itemsToUpdate) {
+              // Check if this was the last attempt
+              resolve(updatedCount); // Resolve with potentially partial success
+            }
+          };
+        }
+      });
+    };
+    transaction.oncomplete = () => db.close();
+  });
+}
 
 // --- Action Tab Switching Logic ---
 function handleTabClick(event) {
@@ -1167,6 +1292,194 @@ async function handleFetchTitleClick(event) {
   }
 }
 
+// --- NEW: Stash Feature Logic ---
+
+// Function to handle "Stash Current Tab" button click
+async function handleStashCurrentTabClick() {
+  stashStatusMessageElement.textContent = "Stashing...";
+  try {
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!activeTab || !activeTab.url) {
+      setStashStatusMessage("No active tab found or tab has no URL.", true);
+      return;
+    }
+    // Avoid stashing internal pages
+    if (
+      activeTab.url.startsWith("chrome://") ||
+      activeTab.url.startsWith("chrome-extension://")
+    ) {
+      setStashStatusMessage("Cannot stash internal Chrome pages.", true);
+      return;
+    }
+
+    const originalInfo = getOriginalTabInfo(activeTab.url, activeTab.title);
+
+    const newItem = {
+      title: originalInfo.title || originalInfo.url,
+      url: originalInfo.url,
+      dateCreated: new Date().toISOString(),
+      consumed: false,
+    };
+
+    await addStashItemDB(newItem);
+    setStashStatusMessage(`Stashed: ${newItem.title.substring(0, 50)}...`);
+    await renderStashList(); // Refresh the list
+  } catch (error) {
+    console.error("Error stashing current tab:", error);
+    setStashStatusMessage("Error stashing tab.", true);
+  }
+}
+
+// Function to handle "Mark Current Tab as Consumed" button click
+async function handleMarkConsumedClick() {
+  stashStatusMessageElement.textContent = "Checking current tab...";
+  try {
+    const [activeTab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (!activeTab || !activeTab.url) {
+      setStashStatusMessage("No active tab found or tab has no URL.", true);
+      return;
+    }
+
+    const originalInfo = getOriginalTabInfo(activeTab.url, activeTab.title);
+
+    const updatedCount = await updateStashItemConsumedDB(
+      originalInfo.url,
+      true
+    ); // Mark as true (consumed)
+
+    if (updatedCount > 0) {
+      setStashStatusMessage(
+        `Marked "${originalInfo.title.substring(0, 50)}..." as consumed.`
+      );
+      await renderStashList(); // Refresh list
+    } else {
+      setStashStatusMessage(
+        "Current tab URL not found in stash or already consumed."
+      );
+    }
+  } catch (error) {
+    console.error("Error marking tab as consumed:", error);
+    setStashStatusMessage("Error marking tab as consumed.", true);
+  }
+}
+
+// Function to render the list of stashed items
+async function renderStashList() {
+  try {
+    stashListElement.innerHTML = "<p>Loading stashed items...</p>"; // Show loading state
+    let items = await getAllStashItemsDB();
+
+    // 1. Filter
+    const searchTerm = stashSearchInput.value.toLowerCase().trim();
+    if (searchTerm) {
+      items = items.filter(
+        (item) =>
+          (item.title && item.title.toLowerCase().includes(searchTerm)) ||
+          (item.url && item.url.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // 2. Sort
+    const sortValue = stashSortSelect.value;
+    items.sort((a, b) => {
+      switch (sortValue) {
+        case "dateAsc":
+          return new Date(a.dateCreated) - new Date(b.dateCreated);
+        case "titleAsc":
+          return (a.title || "").localeCompare(b.title || "");
+        case "titleDesc":
+          return (b.title || "").localeCompare(a.title || "");
+        case "consumedTrue": // Read first (true > false)
+          return (b.consumed ? 1 : 0) - (a.consumed ? 1 : 0);
+        case "consumedFalse": // Unread first (false > true)
+          return (a.consumed ? 1 : 0) - (b.consumed ? 1 : 0);
+        case "dateDesc": // Default
+        default:
+          return new Date(b.dateCreated) - new Date(a.dateCreated);
+      }
+    });
+
+    // 3. Render
+    stashListElement.innerHTML = ""; // Clear previous list/loading message
+    if (items.length === 0) {
+      stashListElement.innerHTML = "<p>No stashed items found.</p>";
+      return;
+    }
+
+    items.forEach((item) => {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "stash-item";
+      itemDiv.dataset.id = item.id; // Store DB id
+
+      // Status Indicator (Consumed/Unread)
+      const statusSpan = document.createElement("span");
+      statusSpan.className = "stash-item-status";
+      if (item.consumed) {
+        statusSpan.classList.add("consumed");
+        statusSpan.textContent = "Read";
+        statusSpan.title = `Consumed: ${
+          item.dateConsumed
+            ? new Date(item.dateConsumed).toLocaleString()
+            : "N/A"
+        }`;
+      } else {
+        statusSpan.classList.add("unread");
+        statusSpan.textContent = "Unread";
+      }
+      itemDiv.appendChild(statusSpan); // Add status first
+
+      // Main Info (Title and URL)
+      const infoDiv = document.createElement("div");
+      infoDiv.className = "stash-item-info";
+
+      const titleLink = document.createElement("a"); // Make title a link
+      titleLink.className = "stash-item-title";
+      titleLink.textContent = item.title || item.url;
+      titleLink.href = item.url;
+      titleLink.title = item.url; // Tooltip shows URL
+      titleLink.target = "_blank"; // Open in new tab
+      infoDiv.appendChild(titleLink);
+
+      const urlSpan = document.createElement("span");
+      urlSpan.className = "stash-item-url";
+      // Display hostname for brevity
+      try {
+        urlSpan.textContent = new URL(item.url).hostname;
+      } catch {
+        urlSpan.textContent = item.url;
+      }
+      infoDiv.appendChild(urlSpan);
+
+      itemDiv.appendChild(infoDiv);
+
+      // Date Stashed
+      const dateSpan = document.createElement("span");
+      dateSpan.className = "stash-item-date";
+      dateSpan.textContent = new Date(item.dateCreated).toLocaleDateString();
+      dateSpan.title = new Date(item.dateCreated).toLocaleString(); // Tooltip with time
+      itemDiv.appendChild(dateSpan);
+
+      // Optional: Add Actions (like delete, mark unread) later
+      // const actionsDiv = document.createElement('div');
+      // actionsDiv.className = 'stash-item-actions';
+      // ... add buttons ...
+      // itemDiv.appendChild(actionsDiv);
+
+      stashListElement.appendChild(itemDiv);
+    });
+  } catch (error) {
+    console.error("Error rendering stash list:", error);
+    stashListElement.innerHTML = "<p>Error loading stashed items.</p>";
+    setStashStatusMessage("Error loading stash.", true);
+  }
+}
+
 // --- Utility Functions ---
 function setStatusMessage(message, isError = false) {
   statusMessageElement.textContent = message;
@@ -1188,6 +1501,17 @@ function setGroupStatusMessage(message, isError = false) {
     }
   }, timeout);
 }
+// NEW: Stash status message
+function setStashStatusMessage(message, isError = false) {
+  stashStatusMessageElement.textContent = message;
+  stashStatusMessageElement.style.color = isError ? "#d9534f" : "#31708f";
+  const timeout = 5000;
+  setTimeout(() => {
+    if (stashStatusMessageElement.textContent === message) {
+      stashStatusMessageElement.textContent = "";
+    }
+  }, timeout);
+}
 
 // --- Event Listeners ---
 document.addEventListener("DOMContentLoaded", () => {
@@ -1195,10 +1519,15 @@ document.addEventListener("DOMContentLoaded", () => {
   renderBookmarkTree();
   loadExistingGroups();
   populateNewGroupColors();
+  renderStashList(); // Initial render of stash list
+
+  // Add event listeners for the action tabs
   tabButtons.forEach((button) => {
     button.addEventListener("click", handleTabClick);
   });
 });
+
+// Browser event listeners...
 chrome.tabs.onCreated.addListener(renderTabs);
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   checkedTabIds.delete(tabId);
@@ -1229,6 +1558,8 @@ chrome.bookmarks.onCreated.addListener(renderBookmarkTree);
 chrome.bookmarks.onRemoved.addListener(renderBookmarkTree);
 chrome.bookmarks.onChanged.addListener(renderBookmarkTree);
 chrome.bookmarks.onMoved.addListener(renderBookmarkTree);
+
+// UI Element Listeners...
 selectAllCheckbox.addEventListener("change", handleSelectAllChange);
 bookmarkSelectedBtn.addEventListener("click", handleBookmarkSelectedClick);
 bookmarkDeleteBtn.addEventListener("click", handleBookmarkAndDeleteClick);
@@ -1236,6 +1567,14 @@ targetGroupSelect.addEventListener("change", handleTargetGroupChange);
 moveToGroupBtn.addEventListener("click", handleMoveToGroupClick);
 groupByDomainBtn.addEventListener("click", handleGroupByDomainClick);
 regroupAllByDomainBtn.addEventListener("click", handleRegroupAllByDomainClick);
+
+// --- NEW: Stash Listeners ---
+stashCurrentTabBtn.addEventListener("click", handleStashCurrentTabClick);
+markConsumedBtn.addEventListener("click", handleMarkConsumedClick);
+stashSearchInput.addEventListener("input", renderStashList); // Re-render on search input
+stashSortSelect.addEventListener("change", renderStashList); // Re-render on sort change
+
+// Keypress listeners...
 newFolderNameInput.addEventListener("keypress", (event) => {
   if (event.key === "Enter") {
     handleBookmarkSelectedClick();
@@ -1247,4 +1586,4 @@ newGroupNameInput.addEventListener("keypress", (event) => {
   }
 });
 
-console.log("Sidebar script loaded (with URL fallback title).");
+console.log("Sidebar script loaded (with Stash feature).");
