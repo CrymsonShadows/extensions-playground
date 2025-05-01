@@ -1,15 +1,23 @@
 // tabs_ui.js
 import { groupColorMap, groupBackgroundColorMap } from "./constants.js";
-import { getOriginalTabInfo } from "./utils.js";
-import { handleFetchTitleClick } from "./ui.js"; // Import fetch title handler
+import { getOriginalTabInfo, setStatusMessage } from "./utils.js"; // Import setStatusMessage
+import { handleFetchTitleClick } from "./ui.js";
 
 // --- In-memory state for checked tabs ---
 let checkedTabIds = new Set();
 
-// --- Element References --- (Get elements needed by this module)
+// --- Element References ---
 const tabListElement = document.getElementById("tab-list");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const selectedCountSpan = document.getElementById("selected-count");
+// NEW: Header Close Button Reference
+const headerCloseSelectedBtn = document.getElementById(
+  "header-close-selected-btn"
+);
+// NEW: Tab List Status Message Element
+const tabListStatusMessageElement = document.getElementById(
+  "tab-list-status-message"
+);
 
 // --- Checkbox State Management ---
 function handleCheckboxChange(event) {
@@ -166,8 +174,12 @@ async function closeTab(tabId) {
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
-      // Maybe use a generic status message?
-      // setStatusMessage(`Error closing tab: ${error.message}`, true);
+      // Use the new tab list status message element
+      setStatusMessage(
+        tabListStatusMessageElement,
+        `Error closing tab: ${error.message}`,
+        true
+      );
       if (chrome.runtime.lastError) {
         console.error(
           "Chrome runtime error:",
@@ -178,6 +190,47 @@ async function closeTab(tabId) {
       console.log(`Tab ${tabId} already closed.`);
       renderTabs(); // Re-render to ensure list consistency
     }
+  }
+}
+
+// --- NEW: Close Selected Tabs Action (Moved Here) ---
+async function handleCloseSelectedTabsClick() {
+  const selectedIdsSet = getSelectedTabIds(); // Get the Set of IDs
+  if (selectedIdsSet.size === 0) {
+    // Use the new tab list status message element
+    setStatusMessage(
+      tabListStatusMessageElement,
+      "No tabs selected to close.",
+      true
+    );
+    return;
+  }
+
+  const tabIdsToClose = Array.from(selectedIdsSet); // Convert Set to Array for API call
+  setStatusMessage(
+    tabListStatusMessageElement,
+    `Closing ${tabIdsToClose.length} selected tab(s)...`
+  );
+  console.log("Attempting to close tabs:", tabIdsToClose);
+
+  try {
+    await chrome.tabs.remove(tabIdsToClose);
+    // The onRemoved listener in sidebar.js handles cleanup and re-render
+    setStatusMessage(
+      tabListStatusMessageElement,
+      `Closed ${tabIdsToClose.length} tab(s).`
+    );
+  } catch (error) {
+    console.error("Error closing selected tabs:", error);
+    setStatusMessage(
+      tabListStatusMessageElement,
+      `Error closing tabs: ${error.message}`,
+      true
+    );
+    if (chrome.runtime.lastError) {
+      console.error("Chrome runtime error:", chrome.runtime.lastError.message);
+    }
+    // Re-render might happen via onRemoved anyway
   }
 }
 
@@ -385,7 +438,6 @@ export function getSelectedTabData() {
 
 export function clearSelectedTabs() {
   checkedTabIds.clear();
-  // Visually deselect all checkboxes in the DOM
   const checkboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]'
   );
@@ -395,15 +447,20 @@ export function clearSelectedTabs() {
     groupCheckbox.checked = false;
     groupCheckbox.indeterminate = false;
   });
-  updateSelectAllCheckboxState(); // Update counts/parents
+  updateSelectAllCheckboxState();
+}
+export function removeCheckedTabId(tabId) {
+  // Keep this if needed elsewhere, though onRemoved handles it now
+  checkedTabIds.delete(tabId);
 }
 
+// --- Setup ---
 export function setupTabsUI() {
   selectAllCheckbox.addEventListener("change", handleSelectAllChange);
+  // Add listener for the new header close button
+  headerCloseSelectedBtn.addEventListener(
+    "click",
+    handleCloseSelectedTabsClick
+  );
   // Initial render is called from sidebar.js
-}
-
-// Function to remove a specific tab ID (used when closing)
-export function removeCheckedTabId(tabId) {
-  checkedTabIds.delete(tabId);
 }

@@ -19,7 +19,6 @@ body {
   overflow: hidden;
 }
 
-/* NEW: Helper class to hide elements */
 .hidden {
   display: none !important;
 }
@@ -42,7 +41,6 @@ h3 {
   border: 1px solid #ddd;
   overflow: hidden;
 }
-
 .tab-buttons {
   display: flex;
   background-color: #dde3e8;
@@ -67,7 +65,6 @@ h3 {
   border-bottom-color: #1a73e8;
   background-color: #e9edf0;
 }
-
 .tab-content {
   padding: 10px;
 }
@@ -100,6 +97,7 @@ h3 {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  flex-grow: 1; /* Allow title to take space */
 }
 .selected-count-display {
   font-size: 0.8em;
@@ -112,6 +110,15 @@ h3 {
   min-width: 10px;
   text-align: center;
 }
+
+/* NEW: Container for header controls */
+.tab-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between select all and close button */
+  flex-shrink: 0; /* Prevent controls from shrinking */
+}
+
 .select-all-container {
   display: flex;
   align-items: center;
@@ -126,6 +133,36 @@ h3 {
 #select-all-checkbox {
   cursor: pointer;
   accent-color: #5cb85c;
+}
+
+/* NEW: Icon Button Style */
+.btn-icon {
+  background: none;
+  border: none;
+  padding: 4px; /* Adjust padding */
+  cursor: pointer;
+  font-size: 1.4em; /* Adjust size */
+  line-height: 1;
+  color: #666;
+  border-radius: 50%; /* Make it round */
+  width: 28px; /* Fixed width */
+  height: 28px; /* Fixed height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.btn-icon:hover {
+  background-color: #e0e0e0;
+  color: #333;
+}
+/* Specific style for the close button in the header */
+.btn-icon.close-btn {
+  font-weight: bold;
+}
+.btn-icon.close-btn:hover {
+  color: #d9534f; /* Red on hover */
+  background-color: #fbeae9; /* Light red background on hover */
 }
 
 .tab-list {
@@ -359,6 +396,7 @@ h3 {
   display: flex;
   gap: 8px;
   margin-top: 5px;
+  flex-wrap: wrap;
 }
 .btn {
   padding: 9px 14px;
@@ -369,6 +407,7 @@ h3 {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
   flex-grow: 1;
   text-align: center;
+  min-width: 100px;
 }
 .bookmark-btn {
   background-color: #5cb85c;
@@ -386,6 +425,9 @@ h3 {
   background-color: #c9302c;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+/* Removed specific .close-btn style if it was only for the button group */
+/* .close-btn { background-color: #6c757d; color: white; } */
+/* .close-btn:hover { background-color: #5a6268; box-shadow: 0 2px 4px rgba(0,0,0,0.1); } */
 
 /* Styling for Grouping Actions Panel */
 .new-group-options {
@@ -429,7 +471,7 @@ hr.section-divider {
   color: white;
   width: 100%;
   margin-top: 5px;
-  margin-bottom: 5px; /* Add bottom margin */
+  margin-bottom: 5px;
 }
 .auto-group-btn:hover {
   background-color: #5a6268;
@@ -456,29 +498,26 @@ hr.section-divider {
   background-color: #ec971f;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
 .stash-controls {
   display: flex;
-  flex-wrap: wrap; /* Allow wrapping on small screens */
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 10px;
 }
-/* Adjust widths for filter, search, sort */
 .stash-filter-select {
-  min-width: 120px; /* Adjust as needed */
-  flex-basis: 120px; /* Base width */
-  flex-grow: 1; /* Allow growing slightly */
+  min-width: 120px;
+  flex-basis: 120px;
+  flex-grow: 1;
 }
 #stash-search {
-  flex-grow: 10; /* Allow search to take more space */
-  min-width: 100px; /* Minimum search width */
+  flex-grow: 10;
+  min-width: 100px;
 }
 .stash-sort-select {
   min-width: 150px;
   flex-basis: 150px;
   flex-grow: 1;
 }
-
 .stash-list {
   max-height: 250px;
   overflow-y: auto;
@@ -491,12 +530,11 @@ hr.section-divider {
   align-items: center;
   padding: 8px 10px;
   border-bottom: 1px solid #eee;
-  gap: 8px; /* Space between elements */
+  gap: 8px;
 }
 .stash-item:last-child {
   border-bottom: none;
 }
-
 .stash-item-status {
   flex-shrink: 0;
   font-size: 0.8em;
@@ -518,7 +556,6 @@ hr.section-divider {
 .stash-item-status.consumed + .stash-item-info .stash-item-title:hover {
   text-decoration: line-through underline;
 }
-
 .stash-item-info {
   flex-grow: 1;
   overflow: hidden;
@@ -546,8 +583,6 @@ hr.section-divider {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* NEW: Stash Count Styling */
 .stash-item-count {
   font-size: 0.75em;
   color: #888;
@@ -555,15 +590,14 @@ hr.section-divider {
   padding: 1px 4px;
   border-radius: 3px;
   flex-shrink: 0;
-  margin-left: 4px; /* Space before count */
+  margin-left: 4px;
 }
-
 .stash-item-date {
   font-size: 0.75em;
   color: #888;
   flex-shrink: 0;
   text-align: right;
-  margin-left: auto; /* Push date to the right */
+  margin-left: auto;
 }
 
 /* Status message styling (shared) */
@@ -573,4 +607,11 @@ hr.section-divider {
   min-height: 1.2em;
   text-align: center;
   font-weight: bold;
+}
+
+/* NEW: Status message specific to tab list area */
+#tab-list-status-message {
+  margin-top: 5px; /* Less margin than panel status */
+  margin-bottom: 5px;
+  padding: 0 5px; /* Add padding */
 }

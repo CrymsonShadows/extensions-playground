@@ -30,7 +30,7 @@
                     <div class="button-group">
                          <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
                          <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
-                    </div>
+                         </div>
                     <p id="status-message" class="status-message"></p> </div>
 
                 <div id="group-settings" class="tab-panel">
@@ -87,11 +87,15 @@
         </div>
         <div class="tabs-header">
              <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
-             <div class="select-all-container">
-                 <input type="checkbox" id="select-all-checkbox" title="Select/Deselect All Tabs">
-                 <label for="select-all-checkbox">All</label>
-            </div>
+             <div class="tab-header-controls">
+                 <div class="select-all-container">
+                     <input type="checkbox" id="select-all-checkbox" title="Select/Deselect All Tabs">
+                     <label for="select-all-checkbox">All</label>
+                 </div>
+                 <button id="header-close-selected-btn" class="btn-icon close-btn" title="Close Selected Tabs">&times;</button>
+             </div>
         </div>
+        <p id="tab-list-status-message" class="status-message"></p>
         <div id="tab-list" class="tab-list">
             <p>Loading tabs...</p>
         </div>
@@ -100,4 +104,3 @@
     <script type="module" src="sidebar.js"></script>
 </body>
 </html>
-

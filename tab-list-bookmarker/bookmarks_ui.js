@@ -1,6 +1,8 @@
 // bookmarks_ui.js
 import { setStatusMessage } from "./utils.js";
-import { getSelectedTabData, clearSelectedTabs } from "./tabs_ui.js"; // Import functions to get selected tabs and clear selection
+// Import getSelectedTabData only if needed by bookmarking logic
+// Import clearSelectedTabs if needed after bookmarking
+import { getSelectedTabData, clearSelectedTabs } from "./tabs_ui.js";
 
 // --- Element References ---
 const bookmarkSelectedBtn = document.getElementById("bookmark-selected-btn");
@@ -14,6 +16,8 @@ const selectedFolderDisplay = document.getElementById(
 const selectedFolderIdInput = document.getElementById("selected-folder-id");
 const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
 const statusMessageElement = document.getElementById("status-message");
+// Close Selected Button Reference REMOVED
+// const closeSelectedTabsBtn = document.getElementById("close-selected-tabs-btn");
 
 // --- Bookmark Tree Rendering ---
 function buildBookmarkTreeLevel(nodes, parentElement) {
@@ -131,12 +135,12 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
 }
 
 async function performBookmarkOperation(shouldDeleteTabs = false) {
-  const selectedTabs = getSelectedTabData(); // Get data from tabs_ui
+  /* ... same as before, ensure it uses clearSelectedTabs correctly ... */
+  const selectedTabs = getSelectedTabData(); // Use getSelectedTabData to get objects with id, url, title
   const newFolderName = newFolderNameInput.value.trim();
   const parentFolderId = selectedFolderIdInput.value;
   const parentFolderName = selectedFolderDisplay.textContent;
 
-  // Validation
   if (selectedTabs.length === 0) {
     setStatusMessage(
       statusMessageElement,
@@ -163,7 +167,6 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
 
   try {
     if (newFolderName === "") {
-      // Bookmark into selected folder
       targetFolderId = parentFolderId;
       bookmarkedTabs = await createBookmarksInFolder(
         selectedTabs,
@@ -180,7 +183,6 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
         );
       }
     } else {
-      // Create new folder first
       const newFolder = await chrome.bookmarks.create({
         parentId: parentFolderId,
         title: newFolderName,
@@ -193,8 +195,7 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
       if (bookmarkedTabs.length > 0) {
         successMessage = `Bookmarked ${bookmarkedTabs.length} tab(s) to new folder "${newFolderName}".`;
         operationSucceeded = true;
-        await renderBookmarkTree(); // Refresh tree to show new folder
-        // Try re-selecting parent visually
+        await renderBookmarkTree();
         const parentDetails = bookmarkTreeContainer.querySelector(
           `.bookmark-folder[data-folder-id="${parentFolderId}"] > .folder-details`
         );
@@ -216,9 +217,7 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
     if (operationSucceeded) {
       setStatusMessage(statusMessageElement, successMessage);
       newFolderNameInput.value = "";
-      clearSelectedTabs(); // Clear selection in tabs_ui
 
-      // Delete tabs if requested and bookmarking succeeded
       if (shouldDeleteTabs && bookmarkedTabs.length > 0) {
         setStatusMessage(
           statusMessageElement,
@@ -227,14 +226,12 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
         const tabIdsToDelete = bookmarkedTabs.map((tab) => tab.id);
         console.log("Attempting to delete tabs:", tabIdsToDelete);
         try {
-          // We need a way to call closeTab, which is now likely in tabs_ui.
-          // For now, let's call chrome.tabs.remove directly.
-          // A better approach might be message passing or exposing closeTab.
           await chrome.tabs.remove(tabIdsToDelete);
           setStatusMessage(
             statusMessageElement,
             `Bookmarked and closed ${tabIdsToDelete.length} tab(s).`
           );
+          clearSelectedTabs(); // Clear selection after successful delete
         } catch (deleteError) {
           console.error("Error during tab deletion:", deleteError);
           setStatusMessage(
@@ -243,6 +240,8 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
             true
           );
         }
+      } else {
+        clearSelectedTabs(); // Clear selection if not deleting
       }
     }
   } catch (error) {
@@ -258,6 +257,9 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
   }
 }
 
+// Close Selected Tabs Action REMOVED from here
+// async function handleCloseSelectedTabsClick() { ... }
+
 // --- Setup ---
 export function setupBookmarksUI() {
   bookmarkSelectedBtn.addEventListener("click", () =>
@@ -266,10 +268,12 @@ export function setupBookmarksUI() {
   bookmarkDeleteBtn.addEventListener("click", () =>
     performBookmarkOperation(true)
   );
+  // Close Selected Button Listener REMOVED
+  // closeSelectedTabsBtn.addEventListener('click', handleCloseSelectedTabsClick);
   newFolderNameInput.addEventListener("keypress", (event) => {
     if (event.key === "Enter") {
       performBookmarkOperation(false);
     }
   });
-  // Initial render is called from sidebar.js
+  renderBookmarkTree(); // Initial render
 }
