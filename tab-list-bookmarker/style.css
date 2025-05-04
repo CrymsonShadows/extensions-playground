@@ -650,3 +650,64 @@ hr.section-divider {
 
 /* Link highlighting style (placeholder, actual style in highlight.css) */
 /* .stashed-link-highlight { background-color: yellow; } */
+/* Stash Item Remove Button */
+.stash-item-remove-btn {
+  background: none;
+  border: none;
+  color: #dc3545; /* Red color for delete */
+  font-size: 1.4em; /* Make it larger */
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 6px; /* Adjust padding */
+  margin-left: 5px; /* Space from date */
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  order: 5; /* Ensure it appears last in flex layout */
+  align-self: center; /* Vertically center */
+}
+
+.stash-item-remove-btn:hover {
+  opacity: 1;
+  color: #a71d2a; /* Darker red on hover */
+}
+
+.stash-item-remove-btn:disabled {
+  color: #ccc;
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Loading Indicator for Infinite Scroll */
+.loading-indicator {
+  text-align: center;
+  padding: 10px;
+  font-style: italic;
+  color: #666;
+  font-size: 0.9em;
+}
+
+/* Adjust stash item layout slightly if needed to accommodate button */
+.stash-item {
+  /* Ensure items don't shrink unnecessarily */
+  flex-shrink: 0;
+  /* Other styles remain the same */
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  gap: 8px;
+}
+
+/* Optional: Reduce gap slightly if space is tight */
+/* .stash-item { gap: 6px; } */
+
+/* Ensure date doesn't take up all remaining space */
+.stash-item-date {
+  margin-left: 0; /* Remove margin-left: auto */
+  white-space: nowrap; /* Prevent wrapping */
+}
+/* Add margin to the element before the date if needed */
+.stash-item-count {
+  margin-right: auto; /* Push date and remove button to the right */
+}

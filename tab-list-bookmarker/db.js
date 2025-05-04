@@ -344,3 +344,23 @@ export async function getAllStashUrlsDB() {
     transaction.oncomplete = () => db.close();
   });
 }
+
+// Add this function to db.js
+export async function deleteStashItemDB(itemId) {
+  const db = await openDB(); // Use your existing openDB function
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.delete(itemId); // Use the item's primary key (ID)
+
+    request.onerror = (event) =>
+      reject("Error deleting stash item: " + request.error);
+    request.onsuccess = (event) => {
+      // event.target.result will be undefined for delete operations
+      resolve(); // Resolve indicating success
+    };
+    transaction.oncomplete = () => db.close();
+    transaction.onerror = (event) =>
+      reject("Transaction error deleting item: " + transaction.error);
+  });
+}
