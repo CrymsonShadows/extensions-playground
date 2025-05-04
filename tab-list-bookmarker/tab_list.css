@@ -7,7 +7,7 @@
   align-items: center;
   margin-bottom: 5px;
   padding-right: 5px;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 .tabs-header h2 {
   margin-bottom: 0;
@@ -67,18 +67,20 @@
   margin-top: 5px; /* Less margin than panel status */
   margin-bottom: 5px;
   padding: 0 5px; /* Add padding */
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 /* The main list container */
 #tab-list {
   list-style: none;
   padding: 0;
-  margin: 0 0 15px 0;
+  margin: 0; /* Remove margin, handled by parent */
   overflow-y: auto; /* Enable vertical scrolling */
-  flex-grow: 1; /* Allow list to fill available space */
+  flex-grow: 1; /* Allow list to fill available space in .main-tab-list-area */
   border: 1px solid #eee;
   background-color: #fff;
   border-radius: 4px;
+  min-height: 0; /* Add for flex stability */
 }
 
 /* Styling for Tab Group Headers */
@@ -90,6 +92,7 @@
   position: sticky; /* Keep headers visible when scrolling */
   top: 0;
   z-index: 1;
+  flex-shrink: 0; /* Prevent shrinking */
   /* Background and border set dynamically */
 }
 .tab-group-header:first-child {
@@ -128,6 +131,7 @@
   border-bottom: 1px solid #f0f0f0;
   transition: background-color 0.2s ease;
   color: #333;
+  flex-shrink: 0; /* Prevent shrinking */
 }
 .tab-item:last-child {
   border-bottom: none;

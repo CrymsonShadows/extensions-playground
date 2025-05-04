@@ -69,47 +69,54 @@
                         <button id="mark-consumed-btn" class="btn consumed-btn">Mark Current as Consumed</button>
                     </div>
                     <p id="stash-status-message" class="status-message"></p>
-                    <hr class="section-divider">
-
-                    <h3>Stashed Items</h3>
-                    <div class="stash-controls">
-                        <select id="stash-filter" class="input-field stash-filter-select">
-                            <option value="all">Show All</option>
-                            <option value="unread">Show Unread Only</option>
-                        </select>
-                        <input type="search" id="stash-search" placeholder="Search stash..." class="input-field">
-                        <select id="stash-sort" class="input-field stash-sort-select">
-                            <option value="dateDesc">Date Stashed (Newest)</option>
-                            <option value="dateAsc">Date Stashed (Oldest)</option>
-                            <option value="titleAsc">Title (A-Z)</option>
-                            <option value="titleDesc">Title (Z-A)</option>
-                            <option value="consumedFalse">Status (Unread First)</option>
-                            <option value="consumedTrue">Status (Read First)</option>
-                        </select>
-                        <button id="highlight-toggle-btn" class="btn toggle-btn" title="Toggle highlighting of links on the current page that point to stashed URLs">
-                            Highlight Links </button>
                     </div>
-                    <div id="stash-list" class="stash-list">
-                        <p>Loading stashed items...</p>
-                        </div>
-                </div>
             </div>
         </div>
 
-        <div class="tabs-header">
-             <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
-             <div class="tab-header-controls">
-                 <div class="select-all-container">
-                     <input type="checkbox" id="select-all-checkbox" title="Select/Deselect All Tabs">
-                     <label for="select-all-checkbox">All</label>
+        <div class="main-tab-list-area">
+            <div class="tabs-header">
+                 <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
+                 <div class="tab-header-controls">
+                     <div class="select-all-container">
+                         <input type="checkbox" id="select-all-checkbox" title="Select/Deselect All Tabs">
+                         <label for="select-all-checkbox">All</label>
+                     </div>
+                     <button id="header-close-selected-btn" class="btn-icon close-btn" title="Close Selected Tabs">&times;</button>
                  </div>
-                 <button id="header-close-selected-btn" class="btn-icon close-btn" title="Close Selected Tabs">&times;</button>
+            </div>
+            <p id="tab-list-status-message" class="status-message"></p>
+            <div id="tab-list" class="tab-list">
+                <p>Loading tabs...</p>
+            </div>
+        </div>
+
+        <div id="stash-list-area" class="stash-list-area hidden">
+             <div class="stash-controls-section" style="flex-shrink: 0; padding: 0 10px;">
+                 <h3>Stashed Items</h3>
+                 <div class="stash-controls">
+                     <select id="stash-filter" class="input-field stash-filter-select">
+                         <option value="all">Show All</option>
+                         <option value="unread">Show Unread Only</option>
+                     </select>
+                     <input type="search" id="stash-search" placeholder="Search stash..." class="input-field">
+                     <select id="stash-sort" class="input-field stash-sort-select">
+                         <option value="dateDesc">Date Stashed (Newest)</option>
+                         <option value="dateAsc">Date Stashed (Oldest)</option>
+                         <option value="titleAsc">Title (A-Z)</option>
+                         <option value="titleDesc">Title (Z-A)</option>
+                         <option value="consumedFalse">Status (Unread First)</option>
+                         <option value="consumedTrue">Status (Read First)</option>
+                     </select>
+                     <button id="highlight-toggle-btn" class="btn toggle-btn" title="Toggle highlighting of links on the current page that point to stashed URLs">
+                         Highlight Links </button>
+                 </div>
+             </div>
+
+             <div id="stash-list" class="stash-list">
+                 <p>Loading stashed items...</p>
              </div>
         </div>
-        <p id="tab-list-status-message" class="status-message"></p>
-        <div id="tab-list" class="tab-list">
-            <p>Loading tabs...</p>
-            </div>
+
     </div>
 
     <script type="module" src="sidebar.js"></script>

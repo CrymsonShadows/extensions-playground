@@ -1,10 +1,10 @@
 // ui.js
 
-// --- Element References --- (Get references needed for this module)
+// --- Element References ---
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanels = document.querySelectorAll(".tab-panel");
-const tabsHeader = document.querySelector(".tabs-header"); // Get the header for the main tab list
-const tabList = document.getElementById("tab-list"); // Get the main tab list itself
+const mainTabListArea = document.querySelector(".main-tab-list-area"); // Wrapper for current tabs
+const stashListArea = document.getElementById("stash-list-area"); // Get the new stash list wrapper
 
 // --- Action Tab Switching Logic ---
 function handleTabClick(event) {
@@ -24,21 +24,33 @@ function handleTabClick(event) {
     console.error("Target panel not found:", targetPanelId);
   }
 
-  // *** NEW: Show/Hide main tab list based on active action tab ***
-  if (tabsHeader && tabList) {
-    if (targetPanelId === "stash-settings") {
-      // Hide the main tab list and its header if Stash is active
-      tabsHeader.classList.add("hidden");
-      tabList.classList.add("hidden");
+  // Determine if the stash tab is the target
+  const isStashTabActive = targetPanelId === "stash-settings";
+
+  // Show/Hide STASH list AREA
+  if (stashListArea) {
+    // Check if the stash wrapper exists
+    if (isStashTabActive) {
+      stashListArea.classList.remove("hidden");
     } else {
-      // Show the main tab list and its header for other action tabs
-      tabsHeader.classList.remove("hidden");
-      tabList.classList.remove("hidden");
+      stashListArea.classList.add("hidden");
     }
   } else {
-    console.error(
-      "Could not find .tabs-header or #tab-list elements to hide/show."
-    );
+    console.error("Could not find #stash-list-area element to hide/show.");
+  }
+
+  // Show/Hide MAIN tab list AREA
+  if (mainTabListArea) {
+    // Check if the main tab list wrapper exists
+    if (isStashTabActive) {
+      // Hide the main tab list area if Stash tab is active
+      mainTabListArea.classList.add("hidden");
+    } else {
+      // Show the main tab list area for other action tabs
+      mainTabListArea.classList.remove("hidden");
+    }
+  } else {
+    console.error("Could not find .main-tab-list-area element to hide/show.");
   }
 }
 
@@ -48,28 +60,21 @@ export function setupActionTabs() {
   });
 
   // Ensure the first tab is active on load and set initial visibility
-  if (tabButtons.length > 0 && tabPanels.length > 0) {
+  if (
+    tabButtons.length > 0 &&
+    tabPanels.length > 0 &&
+    stashListArea &&
+    mainTabListArea
+  ) {
     // Manually trigger the click handler for the first button
-    // to ensure the correct initial state (including hiding/showing tab list)
+    // to ensure the correct initial state (hiding/showing both areas)
     handleTabClick({ currentTarget: tabButtons[0] });
-    // // Or, less ideally, set classes directly:
-    // tabButtons[0].classList.add('active');
-    // tabPanels[0].classList.add('active');
-    // // Explicitly set initial visibility based on the first tab
-    // if (tabsHeader && tabList) {
-    //     if (tabButtons[0].dataset.target === "stash-settings") {
-    //         tabsHeader.classList.add("hidden");
-    //         tabList.classList.add("hidden");
-    //     } else {
-    //         tabsHeader.classList.remove("hidden");
-    //         tabList.classList.remove("hidden");
-    //     }
-    // }
   }
 }
 
 // --- Fetch Title Logic --- (No changes needed here)
 function waitForTabLoadComplete(tabId, targetUrl) {
+  // ... (implementation remains the same)
   return new Promise((resolve, reject) => {
     const listener = (updatedTabId, changeInfo, tab) => {
       if (updatedTabId === tabId) {

@@ -6,19 +6,19 @@ body {
   padding: 10px;
   background-color: #f4f4f9;
   color: #333;
-  min-width: 300px; /* Increased slightly for more space */
+  min-width: 300px;
   display: flex;
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  overflow: hidden; /* Prevent body scroll */
+  overflow: hidden;
 }
 
 .container {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
-  overflow: hidden; /* Contains scrolling within specific areas */
+  overflow: hidden;
 }
 
 /* Utility Classes */
@@ -33,13 +33,13 @@ h3 {
   margin-top: 10px;
   margin-bottom: 8px;
   padding-bottom: 5px;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 
 /* Common Button Styles */
 .btn {
   padding: 9px 14px;
-  border: 1px solid transparent; /* Add base border */
+  border: 1px solid transparent;
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.9em;
@@ -57,23 +57,23 @@ h3 {
   flex-wrap: wrap;
 }
 
-/* Icon Button Style (e.g., header close) */
+/* Icon Button Style */
 .btn-icon {
   background: none;
   border: none;
-  padding: 4px; /* Adjust padding */
+  padding: 4px;
   cursor: pointer;
-  font-size: 1.4em; /* Adjust size */
+  font-size: 1.4em;
   line-height: 1;
   color: #666;
-  border-radius: 50%; /* Make it round */
-  width: 28px; /* Fixed width */
-  height: 28px; /* Fixed height */
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background-color 0.2s ease, color 0.2s ease;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 .btn-icon:hover {
   background-color: #e0e0e0;
@@ -111,6 +111,7 @@ select.input-field {
   min-height: 1.2em;
   text-align: center;
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 /* Common Divider */
@@ -118,6 +119,7 @@ hr.section-divider {
   border: none;
   border-top: 1px solid #ccc;
   margin: 15px 0;
+  flex-shrink: 0;
 }
 
 /* Loading Indicator Style */
@@ -147,4 +149,37 @@ hr.section-divider {
   100% {
     content: "...";
   }
+}
+
+/* Wrapper for the main tab list area */
+.main-tab-list-area {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; /* Allow this area to grow */
+  overflow: hidden; /* Contain scrolling within #tab-list */
+  margin-top: 10px;
+  min-height: 50px; /* Give it some minimum height */
+}
+
+/* Ensure Action Tabs container doesn't shrink */
+.action-tabs-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* NEW: Wrapper for the stash list area */
+.stash-list-area {
+  display: flex; /* Use flexbox */
+  flex-direction: column; /* Stack children vertically */
+  flex-grow: 1; /* Allow this area to grow */
+  overflow: hidden; /* Contain scrolling within #stash-list */
+  margin-top: 10px; /* Add space above */
+  border-top: 1px solid #ccc; /* Add a separator */
+  padding-top: 5px; /* Add padding above controls */
+  min-height: 50px; /* Give it some minimum height */
+}
+/* Hide stash area by default (JS toggles .hidden) */
+.stash-list-area.hidden {
+  display: none;
 }

@@ -7,11 +7,15 @@
   flex-shrink: 0; /* Prevent shrinking */
   border: 1px solid #ddd;
   overflow: hidden; /* Contains content */
+  /* Make it a flex container */
+  display: flex;
+  flex-direction: column;
 }
 
 .tab-buttons {
   display: flex;
   background-color: #dde3e8;
+  flex-shrink: 0; /* Prevent buttons area from shrinking */
 }
 
 .tab-btn {
@@ -39,6 +43,11 @@
 
 .tab-content {
   padding: 10px;
+  /* Make tab content area flexible */
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1; /* Allow content to fill space */
+  overflow: hidden; /* Prevent content overflow */
 }
 
 .tab-panel {
@@ -49,13 +58,19 @@
 }
 
 .tab-panel.active {
-  display: block; /* Show active panel */
+  /* display: block; */ /* OLD */
+  /* Make active panel flexible */
+  display: flex; /* NEW */
+  flex-direction: column; /* NEW */
+  flex-grow: 1; /* NEW - Allow panel to fill tab-content */
+  overflow: hidden; /* NEW - Prevent panel overflow */
 }
 
 /* Panel-specific headings */
 .tab-panel h3 {
   margin-top: 0;
   border-bottom: 1px solid #ddd;
+  flex-shrink: 0; /* Prevent shrinking */
 }
 
 /* Panel-specific labels */
@@ -65,4 +80,5 @@
   margin-bottom: 3px;
   color: #555;
   font-weight: bold;
+  flex-shrink: 0; /* Prevent shrinking */
 }

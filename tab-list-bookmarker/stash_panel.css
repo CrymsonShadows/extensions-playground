@@ -1,11 +1,12 @@
 /* stash_panel.css - Styles for the Stash action panel */
 
-/* Button group for stash actions */
+/* Button group for stash actions (within the tab panel) */
 .stash-actions {
   margin-bottom: 10px;
+  flex-shrink: 0;
 }
 
-/* Specific button styles */
+/* Specific button styles (within the tab panel) */
 .btn.stash-btn {
   background-color: #7a6ff0; /* Purple */
   color: white;
@@ -26,38 +27,16 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.btn.toggle-btn {
-  background-color: #f8f9fa; /* Light grey */
-  color: #495057;
-  border-color: #ced4da;
-  flex-grow: 0; /* Don't let it grow */
-  min-width: auto; /* Reset min-width */
-  padding: 8px 12px; /* Slightly smaller padding */
-  font-size: 0.85em;
-}
-.btn.toggle-btn:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-.btn.toggle-btn.active {
-  background-color: #cfe2ff; /* Light blue */
-  color: #0a58ca; /* Darker blue */
-  border-color: #9ec5fe;
-  font-weight: bold;
-}
-.btn.toggle-btn.active:hover {
-  background-color: #b6d4fe;
-  border-color: #8bb9fe;
-}
+/* Styles for controls and list moved to the new #stash-list-area */
 
-/* Container for filter/search/sort controls */
+/* Container for filter/search/sort controls (within #stash-list-area) */
 .stash-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 10px;
-  align-items: center; /* Align items vertically */
+  align-items: center;
+  flex-shrink: 0;
 }
 
 /* Specific input/select sizing within controls */
@@ -67,7 +46,7 @@
   flex-grow: 1;
 }
 #stash-search {
-  flex-grow: 10; /* Take up more space */
+  flex-grow: 10;
   min-width: 100px;
 }
 .stash-sort-select {
@@ -76,13 +55,43 @@
   flex-grow: 1;
 }
 
-/* Container for the list of stashed items */
-.stash-list {
-  max-height: 250px; /* Limit height and enable scroll */
-  overflow-y: auto;
+/* Toggle button (within #stash-list-area controls) */
+.btn.toggle-btn {
+  background-color: #f8f9fa;
+  color: #495057;
+  border-color: #ced4da;
+  flex-grow: 0;
+  min-width: auto;
+  padding: 8px 12px;
+  font-size: 0.85em;
+}
+.btn.toggle-btn:hover {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.btn.toggle-btn.active {
+  background-color: #cfe2ff;
+  color: #0a58ca;
+  border-color: #9ec5fe;
+  font-weight: bold;
+}
+.btn.toggle-btn.active:hover {
+  background-color: #b6d4fe;
+  border-color: #8bb9fe;
+}
+
+/* Container for the list of stashed items (within #stash-list-area) */
+#stash-list {
+  /* Target the ID specifically */
+  overflow-y: auto; /* Keep scrolling */
   border: 1px solid #ccc;
   border-radius: 4px;
   background-color: #fff;
+  flex-grow: 1; /* Make list grow and fill #stash-list-area */
+  min-height: 0; /* Important for flexbox sizing */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Individual stashed item */
@@ -92,7 +101,7 @@
   padding: 8px 10px;
   border-bottom: 1px solid #eee;
   gap: 8px;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0; /* Prevent items from shrinking */
 }
 .stash-item:last-child {
   border-bottom: none;
