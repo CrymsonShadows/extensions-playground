@@ -1,13 +1,16 @@
 // background.js
 
-const DB_NAME = "TabStashDB";
-const DB_VERSION = 3; // *** Ensure this matches constants.js and db.js ***
-const STORE_NAME = "stashedTabs";
-const URL_INDEX = "urlIndex";
-const DATE_INDEX = "dateCreatedIndex";
-const CONSUMED_INDEX = "consumedIndex";
-const TITLE_INDEX = "titleIndex";
-const STASH_COUNT_INDEX = "stashCountIndex";
+import { getAllStashUrlsDB } from "./db.js"; // Assuming db.js exports this
+import {
+  DB_NAME,
+  DB_VERSION,
+  STORE_NAME,
+  URL_INDEX,
+  DATE_INDEX,
+  CONSUMED_INDEX,
+  TITLE_INDEX,
+  STASH_COUNT_INDEX,
+} from "./constants.js";
 
 // --- IndexedDB Setup ---
 function openDB() {
@@ -50,7 +53,6 @@ function openDB() {
       // Handle URL Index Uniqueness (Upgrade from v2 to v3)
       if (event.oldVersion < 3) {
         console.log("BG: Upgrading to v3: Enforcing unique URL index.");
-        // ... (Migration logic remains the same) ...
         // *** Robust Migration Steps (Mirrors db.js) ***
         const getAllRequest = store.getAll();
         getAllRequest.onerror = (e) => {
@@ -313,7 +315,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     tab.url.startsWith("about:")
   ) {
     console.log(
-      "Ignoring context menu click on internal/special page:",
+      "BG: Ignoring context menu click on internal/special page:",
       tab.url
     );
     return;
@@ -359,18 +361,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         `BG: Stashed/Updated via context menu: ${itemData.title} (Action: ${result.action}, ID: ${result.id}, Count: ${result.count})`
       );
 
-      // *** NEW: Send message to sidebar to refresh ***
+      // Send message to sidebar to refresh
       chrome.runtime.sendMessage({ action: "stashUpdated" }).catch((err) => {
-        // Ignore errors if the sidebar isn't open or listening
-        if (err.message.includes("Receiving end does not exist")) {
-          // console.log("BG: Sidebar not open, message not sent.");
-        } else {
+        if (!err.message.includes("Receiving end does not exist")) {
           console.error("BG: Error sending stashUpdated message:", err);
         }
       });
     } catch (error) {
       console.error("BG: Error stashing/updating tab via context menu:", error);
-      // Optionally notify the user of the error
     }
   }
   // --- Handle Mark Consumed Action ---
@@ -381,12 +379,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         console.log(
           `BG: Marked ${updateCount} stashed item(s) as consumed for URL: ${originalUrl}`
         );
-        // *** NEW: Send message to sidebar to refresh ***
-        // (Send even for consume, as it changes the list display)
+        // Send message to sidebar to refresh
         chrome.runtime.sendMessage({ action: "stashUpdated" }).catch((err) => {
-          if (err.message.includes("Receiving end does not exist")) {
-            // console.log("BG: Sidebar not open, message not sent.");
-          } else {
+          if (!err.message.includes("Receiving end does not exist")) {
             console.error("BG: Error sending stashUpdated message:", err);
           }
         });
@@ -417,6 +412,61 @@ chrome.action.onClicked.addListener((tab) => {
   } else {
     console.warn("Action clicked on a tab without a windowId?");
   }
+});
+
+// --- NEW: Listener for Messages from Content/Sidebar ---
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "GET_INITIAL_HIGHLIGHT_STATE") {
+    console.log(
+      "BG: Received GET_INITIAL_HIGHLIGHT_STATE request from content script."
+    );
+    // We need to get the current state (enabled status and URLs)
+    // This requires async operations, so return true to keep the channel open
+    (async () => {
+      try {
+        // 1. Get enabled state from storage
+        const storageKey = "stashHighlightEnabled"; // Match stash_ui.js
+        const storageResult = await chrome.storage.local.get(storageKey);
+        const isEnabled = !!storageResult[storageKey];
+
+        // 2. Get stashed URLs if enabled
+        let stashedUrls = [];
+        if (isEnabled) {
+          // Use the DB function directly if available, otherwise might need another message
+          // Assuming getAllStashUrlsDB is accessible here (imported)
+          stashedUrls = await getAllStashUrlsDB();
+          console.log(
+            `BG: Fetched ${stashedUrls.length} URLs for initial state.`
+          );
+        }
+
+        // 3. Send response back to content script
+        sendResponse({
+          enabled: isEnabled,
+          stashedUrls: stashedUrls,
+        });
+        console.log("BG: Sent initial highlight state to content script:", {
+          enabled: isEnabled,
+          count: stashedUrls.length,
+        });
+      } catch (error) {
+        console.error("BG: Error getting initial highlight state:", error);
+        // Send back a default/error state if needed, or let it timeout
+        sendResponse({ enabled: false, stashedUrls: [] });
+      }
+    })(); // Immediately invoke the async function
+
+    return true; // Indicate asynchronous response
+  }
+
+  // Handle other messages if needed (like stashUpdated from context menu handler)
+  if (message.action === "stashUpdated") {
+    // This message is intended for the sidebar, background doesn't need to act on it
+    // console.log("BG: Relaying stashUpdated message (or ignoring if sidebar handles it)");
+  }
+
+  // Return false if not handling the message asynchronously
+  // return false; // Only return true for async responses
 });
 
 console.log("Background service worker started.");

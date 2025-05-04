@@ -1,6 +1,6 @@
 // tabs_ui.js
 import { groupColorMap, groupBackgroundColorMap } from "./constants.js";
-import { getOriginalTabInfo, setStatusMessage } from "./utils.js"; // Import setStatusMessage
+import { getOriginalTabInfo, setStatusMessage } from "./utils.js";
 import { handleFetchTitleClick } from "./ui.js";
 
 // --- In-memory state for checked tabs ---
@@ -10,16 +10,16 @@ let checkedTabIds = new Set();
 const tabListElement = document.getElementById("tab-list");
 const selectAllCheckbox = document.getElementById("select-all-checkbox");
 const selectedCountSpan = document.getElementById("selected-count");
-// NEW: Header Close Button Reference
 const headerCloseSelectedBtn = document.getElementById(
   "header-close-selected-btn"
 );
-// NEW: Tab List Status Message Element
 const tabListStatusMessageElement = document.getElementById(
   "tab-list-status-message"
 );
 
 // --- Checkbox State Management ---
+// handleCheckboxChange, handleGroupCheckboxChange, handleSelectAllChange,
+// updateSelectAllCheckboxState remain the same
 function handleCheckboxChange(event) {
   const checkbox = event.target;
   const tabId = parseInt(checkbox.dataset.tabId, 10);
@@ -166,15 +166,15 @@ function updateSelectAllCheckboxState() {
 }
 
 // --- Tab Actions ---
+// closeTab, handleCloseSelectedTabsClick remain the same
 async function closeTab(tabId) {
   checkedTabIds.delete(tabId); // Remove from state first
   try {
     await chrome.tabs.remove(tabId);
-    // The onRemoved listener in sidebar.js will trigger renderTabs
+    // The onRemoved listener in sidebar.js will trigger renderTabs (debounced)
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
-      // Use the new tab list status message element
       setStatusMessage(
         tabListStatusMessageElement,
         `Error closing tab: ${error.message}`,
@@ -188,16 +188,14 @@ async function closeTab(tabId) {
       }
     } else {
       console.log(`Tab ${tabId} already closed.`);
-      renderTabs(); // Re-render to ensure list consistency
+      // renderTabs(); // Re-render no longer needed here, handled by debounced listener
     }
   }
 }
 
-// --- NEW: Close Selected Tabs Action (Moved Here) ---
 async function handleCloseSelectedTabsClick() {
   const selectedIdsSet = getSelectedTabIds(); // Get the Set of IDs
   if (selectedIdsSet.size === 0) {
-    // Use the new tab list status message element
     setStatusMessage(
       tabListStatusMessageElement,
       "No tabs selected to close.",
@@ -215,7 +213,7 @@ async function handleCloseSelectedTabsClick() {
 
   try {
     await chrome.tabs.remove(tabIdsToClose);
-    // The onRemoved listener in sidebar.js handles cleanup and re-render
+    // The onRemoved listener in sidebar.js handles cleanup and re-render (debounced)
     setStatusMessage(
       tabListStatusMessageElement,
       `Closed ${tabIdsToClose.length} tab(s).`
@@ -230,11 +228,18 @@ async function handleCloseSelectedTabsClick() {
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
-    // Re-render might happen via onRemoved anyway
   }
 }
 
 // --- Tab List Rendering ---
+
+/**
+ * Creates the DOM element for a single tab item.
+ * @param {chrome.tabs.Tab} tab - The Chrome tab object.
+ * @param {boolean} isInGroup - Whether the tab is part of a group.
+ * @param {string|null} groupColorName - The color name of the group, if any.
+ * @returns {HTMLElement} The created tab item div.
+ */
 function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
@@ -243,41 +248,46 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
 
   const originalInfo = getOriginalTabInfo(tab.url, tab.title);
 
+  // Apply group-specific styling
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
     listItem.style.paddingLeft = "21px";
   } else {
-    listItem.style.paddingLeft = "15px";
+    listItem.style.paddingLeft = "15px"; // Default padding for ungrouped
   }
 
+  // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.dataset.tabId = tab.id;
   checkbox.dataset.groupId = tab.groupId;
   checkbox.dataset.tabUrl = originalInfo.url;
   checkbox.dataset.tabTitle = originalInfo.title;
-  checkbox.checked = checkedTabIds.has(tab.id); // Use Set for state
-  checkbox.addEventListener("change", handleCheckboxChange); // Use local handler
+  checkbox.checked = checkedTabIds.has(tab.id); // Restore checked state
+  checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
 
+  // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
-  favicon.src = tab.favIconUrl || "icons/default_favicon.png";
+  favicon.src = tab.favIconUrl || "icons/default_favicon.png"; // Use default if missing
   favicon.alt = "";
   favicon.onerror = () => {
+    // Fallback if favicon fails to load
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
 
+  // Title Container (holds title and potentially fetch button)
   const titleContainer = document.createElement("div");
   titleContainer.className = "tab-title-container";
 
-  // Add fetch button before title if needed
+  // Fetch Title Button (if needed for suspended tabs)
   if (originalInfo.needsTitleFetch) {
     const fetchBtn = document.createElement("button");
     fetchBtn.className = "fetch-title-btn";
-    fetchBtn.innerHTML = "🔄";
+    fetchBtn.innerHTML = "🔄"; // Refresh symbol
     fetchBtn.title = "Load tab to get title";
     fetchBtn.dataset.tabId = tab.id;
     fetchBtn.dataset.originalUrl = originalInfo.url;
@@ -285,38 +295,44 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
     titleContainer.appendChild(fetchBtn);
   }
 
+  // Title Span
   const title = document.createElement("span");
   title.className = "tab-title";
-  title.textContent = originalInfo.title || originalInfo.url;
-  title.title = originalInfo.title || originalInfo.url;
+  title.textContent = originalInfo.title || originalInfo.url; // Display URL if title missing
+  title.title = originalInfo.title || originalInfo.url; // Tooltip
   titleContainer.appendChild(title);
   listItem.appendChild(titleContainer);
 
+  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
-  closeButton.innerHTML = "&times;";
+  closeButton.innerHTML = "&times;"; // Multiplication sign for 'x'
   closeButton.title = "Close Tab";
   closeButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    closeTab(tab.id); // Use local handler
+    event.stopPropagation(); // Prevent triggering other clicks on the item
+    closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
 
-  return listItem;
+  return listItem; // Return the created element
 }
 
 export async function renderTabs() {
-  // Cleanup checked state for closed tabs
+  // console.time("renderTabs"); // Start performance timer
+
+  // Cleanup checked state for closed tabs before fetching current ones
   try {
-    const openTabs = await chrome.tabs.query({
+    const openTabsRaw = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
-    const openTabIds = new Set(openTabs.map((tab) => tab.id));
+    const openTabIds = new Set(openTabsRaw.map((tab) => tab.id));
+    // Filter the existing checkedTabIds Set
     checkedTabIds = new Set(
       [...checkedTabIds].filter((id) => openTabIds.has(id))
     );
   } catch (error) {
     console.error("Error fetching open tabs for cleanup:", error);
+    // Proceed even if cleanup fails, but log the error
   }
 
   // Fetch current tabs and groups
@@ -325,84 +341,103 @@ export async function renderTabs() {
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
     ]);
-    tabListElement.innerHTML = ""; // Clear list
+
+    // *** Use DocumentFragment for batch appending ***
+    const fragment = document.createDocumentFragment();
 
     if (tabs.length === 0) {
-      tabListElement.innerHTML = "<p>No tabs found.</p>";
+      const noTabsPara = document.createElement("p");
+      noTabsPara.textContent = "No tabs found.";
+      fragment.appendChild(noTabsPara);
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
-      checkedTabIds.clear();
-      updateSelectAllCheckboxState();
-      return;
-    }
-    selectAllCheckbox.disabled = false;
+      checkedTabIds.clear(); // Ensure state is clear
+    } else {
+      selectAllCheckbox.disabled = false; // Enable checkbox if tabs exist
 
-    const groupMap = new Map(groups.map((group) => [group.id, group]));
-    const tabsByGroup = new Map();
-    const ungroupedTabs = [];
-    tabs.forEach((tab) => {
-      if (
-        tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE &&
-        groupMap.has(tab.groupId)
-      ) {
-        if (!tabsByGroup.has(tab.groupId)) {
-          tabsByGroup.set(tab.groupId, []);
+      const groupMap = new Map(groups.map((group) => [group.id, group]));
+      const tabsByGroup = new Map();
+      const ungroupedTabs = [];
+
+      // Sort tabs into groups and ungrouped list
+      tabs.forEach((tab) => {
+        if (
+          tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE &&
+          groupMap.has(tab.groupId)
+        ) {
+          if (!tabsByGroup.has(tab.groupId)) {
+            tabsByGroup.set(tab.groupId, []);
+          }
+          tabsByGroup.get(tab.groupId).push(tab);
+        } else {
+          ungroupedTabs.push(tab);
         }
-        tabsByGroup.get(tab.groupId).push(tab);
-      } else {
-        ungroupedTabs.push(tab);
+      });
+
+      // Render groups and their tabs to the fragment
+      groups.forEach((group) => {
+        const groupTabs = tabsByGroup.get(group.id);
+        if (!groupTabs || groupTabs.length === 0) return; // Skip empty groups
+
+        // Create and append group header
+        const header = document.createElement("div");
+        header.className = "tab-group-header";
+        header.dataset.groupId = group.id;
+        header.style.backgroundColor =
+          groupBackgroundColorMap[group.color] || "#F1F3F4";
+        header.style.borderBottom = `1px solid ${
+          groupColorMap[group.color] || "#DADCE0"
+        }`;
+
+        const groupCheckbox = document.createElement("input");
+        groupCheckbox.type = "checkbox";
+        groupCheckbox.title = `Select/Deselect Group: ${
+          group.title || "Unnamed Group"
+        }`;
+        groupCheckbox.dataset.groupId = group.id;
+        groupCheckbox.className = "group-checkbox";
+        groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
+        header.appendChild(groupCheckbox);
+
+        const colorIndicator = document.createElement("span");
+        colorIndicator.className = "group-color-indicator";
+        colorIndicator.style.backgroundColor =
+          groupColorMap[group.color] || "#DADCE0";
+        header.appendChild(colorIndicator);
+
+        const groupTitle = document.createElement("span");
+        groupTitle.className = "group-title";
+        groupTitle.textContent = group.title || "Unnamed Group";
+        header.appendChild(groupTitle);
+
+        fragment.appendChild(header); // Append header to fragment
+
+        // Create and append tabs within the group
+        groupTabs.forEach((tab) => {
+          fragment.appendChild(
+            createTabItemElement(tab, true, group.color) // Create element and append to fragment
+          );
+        });
+      });
+
+      // Render ungrouped tabs to the fragment
+      if (ungroupedTabs.length > 0) {
+        ungroupedTabs.forEach((tab) => {
+          fragment.appendChild(createTabItemElement(tab, false, null)); // Create element and append to fragment
+        });
       }
-    });
-
-    // Render groups
-    groups.forEach((group) => {
-      const groupTabs = tabsByGroup.get(group.id);
-      if (!groupTabs || groupTabs.length === 0) return;
-      const header = document.createElement("div");
-      header.className = "tab-group-header";
-      header.dataset.groupId = group.id;
-      header.style.backgroundColor =
-        groupBackgroundColorMap[group.color] || "#F1F3F4";
-      header.style.borderBottom = `1px solid ${
-        groupColorMap[group.color] || "#DADCE0"
-      }`;
-      const groupCheckbox = document.createElement("input");
-      groupCheckbox.type = "checkbox";
-      groupCheckbox.title = `Select/Deselect Group: ${
-        group.title || "Unnamed Group"
-      }`;
-      groupCheckbox.dataset.groupId = group.id;
-      groupCheckbox.className = "group-checkbox";
-      groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
-      header.appendChild(groupCheckbox); // Use local handler
-      const colorIndicator = document.createElement("span");
-      colorIndicator.className = "group-color-indicator";
-      colorIndicator.style.backgroundColor =
-        groupColorMap[group.color] || "#DADCE0";
-      header.appendChild(colorIndicator);
-      const groupTitle = document.createElement("span");
-      groupTitle.className = "group-title";
-      groupTitle.textContent = group.title || "Unnamed Group";
-      header.appendChild(groupTitle);
-      tabListElement.appendChild(header);
-      groupTabs.forEach((tab) => {
-        tabListElement.appendChild(
-          createTabItemElement(tab, true, group.color)
-        );
-      });
-    });
-
-    // Render ungrouped tabs
-    if (ungroupedTabs.length > 0) {
-      ungroupedTabs.forEach((tab) => {
-        tabListElement.appendChild(createTabItemElement(tab, false, null));
-      });
     }
 
-    updateSelectAllCheckboxState(); // Update counts/parents
+    // Clear the existing list content *once*
+    tabListElement.innerHTML = "";
+    // Append the entire fragment to the DOM *once*
+    tabListElement.appendChild(fragment);
+    // *** End DocumentFragment usage ***
+
+    updateSelectAllCheckboxState(); // Update counts/parents after rendering
   } catch (error) {
     console.error("Error loading tabs/groups:", error);
-    tabListElement.innerHTML = "<p>Error loading tabs.</p>";
+    tabListElement.innerHTML = "<p>Error loading tabs.</p>"; // Display error
     selectAllCheckbox.checked = false;
     selectAllCheckbox.disabled = true;
     selectedCountSpan.textContent = "(0)";
@@ -410,11 +445,12 @@ export async function renderTabs() {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
   }
+  // console.timeEnd("renderTabs"); // End performance timer
 }
 
 // --- Exported functions for external use ---
+// getSelectedTabIds, getSelectedTabData, clearSelectedTabs, removeCheckedTabId remain the same
 export function getSelectedTabIds() {
-  // Return a copy of the Set to prevent external modification
   return new Set(checkedTabIds);
 }
 
@@ -450,17 +486,15 @@ export function clearSelectedTabs() {
   updateSelectAllCheckboxState();
 }
 export function removeCheckedTabId(tabId) {
-  // Keep this if needed elsewhere, though onRemoved handles it now
   checkedTabIds.delete(tabId);
 }
 
 // --- Setup ---
 export function setupTabsUI() {
   selectAllCheckbox.addEventListener("change", handleSelectAllChange);
-  // Add listener for the new header close button
   headerCloseSelectedBtn.addEventListener(
     "click",
     handleCloseSelectedTabsClick
   );
-  // Initial render is called from sidebar.js
+  // Initial render is called from sidebar.js (debounced)
 }

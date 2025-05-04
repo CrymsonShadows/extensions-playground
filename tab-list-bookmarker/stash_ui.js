@@ -8,14 +8,14 @@ import {
   stashOrUpdateItemDB,
   getAllStashItemsDB,
   updateStashItemConsumedDB,
-  getAllStashUrlsDB,
-  deleteStashItemDB, // Import the new delete function
-} from "./db.js"; // Make sure db.js exports getAllStashUrlsDB and deleteStashItemDB
+  getAllStashUrlsDB, // Ensure this is exported from db.js
+  deleteStashItemDB,
+} from "./db.js";
 
 // --- Constants ---
 const HIGHLIGHT_STORAGE_KEY = "stashHighlightEnabled";
-const ITEMS_PER_PAGE = 25; // Number of items to load per "page" for infinite scroll
-const SCROLL_THRESHOLD = 100; // Pixels from bottom to trigger loading more
+const ITEMS_PER_PAGE = 25;
+const SCROLL_THRESHOLD = 100;
 
 // --- Element References ---
 const stashCurrentTabBtn = document.getElementById("stash-current-tab-btn");
@@ -31,11 +31,12 @@ const highlightToggleButton = document.getElementById("highlight-toggle-btn");
 
 // --- State Variables ---
 let isHighlightingEnabled = false;
-let allStashedItems = []; // Holds all items matching current filters/sort
-let currentPage = 1; // Current page number for infinite scroll
-let isLoadingMore = false; // Flag to prevent multiple simultaneous loads
+let allStashedItems = [];
+let currentPage = 1;
+let isLoadingMore = false;
 
 // --- Stash Actions ---
+// handleStashCurrentTabClick, handleMarkConsumedClick remain the same
 async function handleStashCurrentTabClick() {
   setStashStatusMessage(stashStatusMessageElement, "Stashing...");
   try {
@@ -84,7 +85,7 @@ async function handleStashCurrentTabClick() {
       );
     }
     await renderStashList(); // Refresh list completely
-    await updateHighlightingOnActiveTab();
+    await updateHighlightingOnActiveTab(); // Update highlighting in case new URL added
   } catch (error) {
     console.error("Error stashing current tab:", error);
     setStashStatusMessage(
@@ -145,7 +146,7 @@ async function handleMarkConsumedClick() {
       } else {
         await renderStashList(); // Fallback to full re-render if item not found
       }
-      await updateHighlightingOnActiveTab();
+      await updateHighlightingOnActiveTab(); // Update highlighting as consumed status doesn't affect it
     } else {
       setStashStatusMessage(
         stashStatusMessageElement,
@@ -163,53 +164,13 @@ async function handleMarkConsumedClick() {
 }
 
 // --- Stash List Rendering & Infinite Scroll ---
-
-/**
- * Appends a "page" of items to the stash list element.
- */
-function appendItemsPage() {
-  if (isLoadingMore) return; // Avoid concurrent loading
-
-  isLoadingMore = true;
-  // Remove existing loading indicator if present
-  const existingLoader = stashListElement.querySelector(".loading-indicator");
-  if (existingLoader) existingLoader.remove();
-
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const itemsToRender = allStashedItems.slice(startIndex, endIndex);
-
-  if (itemsToRender.length === 0 && currentPage === 1) {
-    stashListElement.innerHTML = "<p>No stashed items match filters.</p>";
-    isLoadingMore = false;
-    return;
-  }
-
-  itemsToRender.forEach((item) => renderSingleStashItem(item));
-
-  currentPage++;
-  isLoadingMore = false;
-
-  // Add loading indicator if there are more items to load
-  if (endIndex < allStashedItems.length) {
-    const loader = document.createElement("div");
-    loader.className = "loading-indicator";
-    loader.textContent = "Loading more...";
-    stashListElement.appendChild(loader);
-  }
-}
-
-/**
- * Renders a single stash item and appends it to the list.
- * @param {object} item - The stash item object from the database.
- */
-function renderSingleStashItem(item) {
+// createSingleStashItemElement, appendItemsPage, renderStashList remain the same
+function createSingleStashItemElement(item) {
   const itemDiv = document.createElement("div");
   itemDiv.className = "stash-item";
-  itemDiv.dataset.id = item.id; // Use ID for deletion
-  itemDiv.dataset.url = item.url; // Store URL for potential updates
+  itemDiv.dataset.id = item.id;
+  itemDiv.dataset.url = item.url;
 
-  // Status Indicator
   const statusSpan = document.createElement("span");
   statusSpan.className = "stash-item-status";
   if (item.consumed) {
@@ -224,7 +185,6 @@ function renderSingleStashItem(item) {
   }
   itemDiv.appendChild(statusSpan);
 
-  // Main Info (Title + URL)
   const infoDiv = document.createElement("div");
   infoDiv.className = "stash-item-info";
   const titleLink = document.createElement("a");
@@ -244,14 +204,12 @@ function renderSingleStashItem(item) {
   infoDiv.appendChild(urlSpan);
   itemDiv.appendChild(infoDiv);
 
-  // Stash Count
   const countSpan = document.createElement("span");
   countSpan.className = "stash-item-count";
   countSpan.textContent = `(${item.stashCount || 1})`;
   countSpan.title = `Stashed ${item.stashCount || 1} time(s)`;
   itemDiv.appendChild(countSpan);
 
-  // Date Stashed
   const dateSpan = document.createElement("span");
   dateSpan.className = "stash-item-date";
   dateSpan.textContent = new Date(item.dateCreated).toLocaleDateString();
@@ -260,27 +218,57 @@ function renderSingleStashItem(item) {
   ).toLocaleString()}`;
   itemDiv.appendChild(dateSpan);
 
-  // --- NEW: Remove Button ---
   const removeBtn = document.createElement("button");
   removeBtn.className = "stash-item-remove-btn";
-  removeBtn.textContent = "×"; // Use '×' symbol
+  removeBtn.textContent = "×";
   removeBtn.title = "Remove this item from stash";
-  removeBtn.dataset.itemId = item.id; // Set item ID for the handler
+  removeBtn.dataset.itemId = item.id;
   itemDiv.appendChild(removeBtn);
-  // --- End Remove Button ---
 
-  stashListElement.appendChild(itemDiv);
+  return itemDiv;
 }
 
-/**
- * Fetches, filters, sorts, and initiates the rendering of the stash list.
- */
+function appendItemsPage() {
+  if (isLoadingMore) return;
+
+  isLoadingMore = true;
+  const existingLoader = stashListElement.querySelector(".loading-indicator");
+  if (existingLoader) existingLoader.remove();
+
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const itemsToRender = allStashedItems.slice(startIndex, endIndex);
+
+  if (itemsToRender.length === 0 && currentPage === 1) {
+    stashListElement.innerHTML = "<p>No stashed items match filters.</p>";
+    isLoadingMore = false;
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  itemsToRender.forEach((item) => {
+    fragment.appendChild(createSingleStashItemElement(item));
+  });
+  stashListElement.appendChild(fragment);
+
+  currentPage++;
+  isLoadingMore = false;
+
+  if (endIndex < allStashedItems.length) {
+    const loader = document.createElement("div");
+    loader.className = "loading-indicator";
+    loader.textContent = "Loading more...";
+    stashListElement.appendChild(loader);
+  }
+}
+
 export async function renderStashList() {
   try {
-    stashListElement.innerHTML = "<p>Loading stashed items...</p>"; // Initial loading message
+    if (currentPage === 1) {
+      stashListElement.innerHTML = "<p>Loading stashed items...</p>";
+    }
     let items = await getAllStashItemsDB();
 
-    // --- Filtering ---
     const filterValue = stashFilterSelect.value;
     if (filterValue === "unread") {
       items = items.filter((item) => !item.consumed);
@@ -294,7 +282,6 @@ export async function renderStashList() {
       );
     }
 
-    // --- Sorting ---
     const sortValue = stashSortSelect.value;
     items.sort((a, b) => {
       switch (sortValue) {
@@ -304,11 +291,9 @@ export async function renderStashList() {
           return (a.title || "").localeCompare(b.title || "");
         case "titleDesc":
           return (b.title || "").localeCompare(a.title || "");
-        case "consumedTrue": // Read first
-          // Sort consumed (true) items before unread (false) items
+        case "consumedTrue":
           return a.consumed === b.consumed ? 0 : a.consumed ? -1 : 1;
-        case "consumedFalse": // Unread first
-          // Sort unread (false) items before consumed (true) items
+        case "consumedFalse":
           return a.consumed === b.consumed ? 0 : a.consumed ? 1 : -1;
         case "dateDesc":
         default:
@@ -316,14 +301,13 @@ export async function renderStashList() {
       }
     });
 
-    // --- Store filtered/sorted list and start rendering ---
-    allStashedItems = items; // Store the full list
-    currentPage = 1; // Reset page number
-    stashListElement.innerHTML = ""; // Clear previous content/loading message
-    appendItemsPage(); // Render the first page
+    allStashedItems = items;
+    currentPage = 1;
+    stashListElement.innerHTML = ""; // Clear before rendering first page
+    appendItemsPage();
   } catch (error) {
     console.error("Error rendering stash list:", error);
-    allStashedItems = []; // Clear data on error
+    allStashedItems = [];
     stashListElement.innerHTML = "<p>Error loading stashed items.</p>";
     setStashStatusMessage(
       stashStatusMessageElement,
@@ -333,69 +317,51 @@ export async function renderStashList() {
   }
 }
 
-// Debounced version for search/filter/sort changes
-const debouncedRenderStashList = debounce(renderStashList, 350);
+const debouncedRenderStashList = debounce(renderStashList, 300);
 
-// Scroll event handler for infinite scrolling
 const handleScroll = debounce(() => {
   if (isLoadingMore) return;
-
   const nearBottom =
     stashListElement.scrollHeight -
       stashListElement.scrollTop -
       stashListElement.clientHeight <
     SCROLL_THRESHOLD;
-
   if (
     nearBottom &&
     (currentPage - 1) * ITEMS_PER_PAGE < allStashedItems.length
   ) {
-    // console.log("Near bottom, loading more...");
     appendItemsPage();
   }
-}, 100); // Debounce scroll checks slightly
+}, 100);
 
 // --- Remove Stashed Item Logic ---
+// handleRemoveItemClick remains the same
 async function handleRemoveItemClick(event) {
   if (!event.target.classList.contains("stash-item-remove-btn")) {
-    return; // Ignore clicks not on the remove button
+    return;
   }
-
   const button = event.target;
   const itemId = parseInt(button.dataset.itemId, 10);
   const itemDiv = button.closest(".stash-item");
-  const itemUrl = itemDiv?.dataset.url; // Get URL for highlighting update
+  const itemUrl = itemDiv?.dataset.url;
 
   if (isNaN(itemId) || !itemDiv) {
     console.error("Could not find item ID or parent element for removal.");
     return;
   }
-
-  // Optional: Add confirmation dialog
-  // if (!confirm(`Are you sure you want to remove "${itemDiv.querySelector('.stash-item-title')?.textContent || 'this item'}"?`)) {
-  //     return;
-  // }
-
   try {
-    button.disabled = true; // Prevent double clicks
-    button.textContent = "..."; // Indicate processing
-    await deleteStashItemDB(itemId); // Call DB function
-
-    // Remove from the DOM
+    button.disabled = true;
+    button.textContent = "...";
+    await deleteStashItemDB(itemId);
     itemDiv.remove();
-
-    // Remove from the local 'allStashedItems' array
     const itemIndex = allStashedItems.findIndex((item) => item.id === itemId);
     if (itemIndex > -1) {
       allStashedItems.splice(itemIndex, 1);
     }
-
     setStashStatusMessage(stashStatusMessageElement, "Item removed.");
     console.log(`Removed stashed item with ID: ${itemId}`);
-
-    // Update highlighting if the removed URL was potentially highlighted
     if (itemUrl) {
-      await updateHighlightingOnActiveTab(); // Refresh highlights
+      await updateHighlightingOnActiveTab();
     }
   } catch (error) {
     console.error(`Error removing stashed item ${itemId}:`, error);
@@ -404,17 +370,18 @@ async function handleRemoveItemClick(event) {
       "Error removing item.",
       true
     );
-    button.disabled = false; // Re-enable button on error
-    button.textContent = "×"; // Restore original text
+    button.disabled = false;
+    button.textContent = "×";
   }
 }
 
-// --- Link Highlighting Logic --- (Remains the same as before)
-
+// --- Link Highlighting Logic ---
+// loadHighlightState, saveHighlightState, updateHighlightButtonState remain the same
 async function loadHighlightState() {
   try {
     const result = await chrome.storage.local.get(HIGHLIGHT_STORAGE_KEY);
     isHighlightingEnabled = !!result[HIGHLIGHT_STORAGE_KEY];
+    console.log("Highlight state loaded:", isHighlightingEnabled);
     updateHighlightButtonState();
   } catch (error) {
     console.error("Error loading highlight state:", error);
@@ -428,6 +395,7 @@ async function saveHighlightState() {
     await chrome.storage.local.set({
       [HIGHLIGHT_STORAGE_KEY]: isHighlightingEnabled,
     });
+    console.log("Highlight state saved:", isHighlightingEnabled);
   } catch (error) {
     console.error("Error saving highlight state:", error);
   }
@@ -445,19 +413,24 @@ function updateHighlightButtonState() {
   }
 }
 
-async function updateHighlightingOnActiveTab() {
+// *** EXPORT this function ***
+export async function updateHighlightingOnActiveTab() {
   let stashedUrls = [];
   if (isHighlightingEnabled) {
     try {
-      // Fetch fresh URLs directly from DB for accuracy after potential deletions
       stashedUrls = await getAllStashUrlsDB();
+      console.log(`Highlighting: Fetched ${stashedUrls.length} URLs from DB.`);
     } catch (error) {
       console.error("Error fetching stashed URLs for highlighting:", error);
-      isHighlightingEnabled = false;
-      updateHighlightButtonState();
-      await saveHighlightState();
       stashedUrls = [];
+      setStashStatusMessage(
+        stashStatusMessageElement,
+        "Error fetching URLs for highlighting.",
+        true
+      );
     }
+  } else {
+    console.log("Highlighting: Disabled, sending empty URL list.");
   }
 
   try {
@@ -472,59 +445,80 @@ async function updateHighlightingOnActiveTab() {
       !activeTab.url.startsWith("chrome") &&
       !activeTab.url.startsWith("about:")
     ) {
-      // console.log(`Sending highlight update to tab ${activeTab.id}: enabled=${isHighlightingEnabled}, urlCount=${stashedUrls.length}`);
-      await chrome.tabs.sendMessage(activeTab.id, {
-        type: "UPDATE_HIGHLIGHTING",
-        enabled: isHighlightingEnabled,
-        stashedUrls: stashedUrls,
-      });
+      console.log(
+        `Highlighting: Sending UPDATE_HIGHLIGHTING to tab ${activeTab.id}: enabled=${isHighlightingEnabled}, urlCount=${stashedUrls.length}`
+      );
+      // Use a try-catch specifically around sendMessage
+      try {
+        await chrome.tabs.sendMessage(activeTab.id, {
+          type: "UPDATE_HIGHLIGHTING",
+          enabled: isHighlightingEnabled,
+          stashedUrls: stashedUrls,
+        });
+        console.log(
+          `Highlighting: Message sent successfully to tab ${activeTab.id}.`
+        );
+      } catch (sendError) {
+        if (
+          sendError.message.includes("Could not establish connection") ||
+          sendError.message.includes("Receiving end does not exist")
+        ) {
+          console.warn(
+            `Highlighting: Could not send message to active tab ${activeTab?.id}. Content script might not be injected or ready. Error: ${sendError.message}`
+          );
+        } else {
+          console.error(
+            "Highlighting: Error sending update message:",
+            sendError
+          );
+          setStashStatusMessage(
+            stashStatusMessageElement,
+            "Error sending highlight update.",
+            true
+          );
+        }
+      }
     } else {
-      // console.log("No suitable active tab found to send highlight update.");
+      console.log(
+        "Highlighting: No suitable active tab found to send highlight update.",
+        activeTab
+      );
     }
-  } catch (error) {
-    if (
-      error.message.includes("Could not establish connection") ||
-      error.message.includes("Receiving end does not exist")
-    ) {
-      // console.warn(`Could not send highlight update to active tab. Content script might not be injected or ready on this page (${error.message})`);
-    } else {
-      console.error("Error sending highlight update message:", error);
-    }
+  } catch (queryError) {
+    // Error querying tabs
+    console.error("Highlighting: Error querying active tab:", queryError);
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      "Error finding active tab.",
+      true
+    );
   }
 }
 
 async function handleHighlightToggleClick() {
   isHighlightingEnabled = !isHighlightingEnabled;
+  console.log("Highlight toggle clicked. New state:", isHighlightingEnabled);
   updateHighlightButtonState();
   await saveHighlightState();
-  await updateHighlightingOnActiveTab();
+  await updateHighlightingOnActiveTab(); // Send update immediately
 }
 
 // --- Setup ---
 export async function setupStashUI() {
-  // Existing listeners
+  // Listeners
   stashCurrentTabBtn.addEventListener("click", handleStashCurrentTabClick);
   markConsumedBtn.addEventListener("click", handleMarkConsumedClick);
-  // Use debounced version for inputs/selects that trigger full re-render
   stashSearchInput.addEventListener("input", debouncedRenderStashList);
-  stashSortSelect.addEventListener("change", renderStashList); // Full re-render on sort change
-  stashFilterSelect.addEventListener("change", renderStashList); // Full re-render on filter change
-
-  // New listener for highlight toggle
+  stashSortSelect.addEventListener("change", renderStashList);
+  stashFilterSelect.addEventListener("change", renderStashList);
   highlightToggleButton.addEventListener("click", handleHighlightToggleClick);
-
-  // New listener for infinite scroll
   stashListElement.addEventListener("scroll", handleScroll);
-
-  // New listener for remove buttons (using event delegation)
   stashListElement.addEventListener("click", handleRemoveItemClick);
 
-  // Load initial highlight state
+  // Initial state load
   await loadHighlightState();
 
-  // Initial render is called from sidebar.js, which will trigger renderStashList
-  // renderStashList(); // No longer needed here
-
-  // Send initial highlight state when the sidebar opens/loads
-  await updateHighlightingOnActiveTab();
+  // Initial render is triggered by sidebar.js
+  // ** REMOVED: await updateHighlightingOnActiveTab(); **
+  // This is now called by sidebar.js after initial renderAllLists
 }

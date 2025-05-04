@@ -1,7 +1,5 @@
 // bookmarks_ui.js
 import { setStatusMessage } from "./utils.js";
-// Import getSelectedTabData only if needed by bookmarking logic
-// Import clearSelectedTabs if needed after bookmarking
 import { getSelectedTabData, clearSelectedTabs } from "./tabs_ui.js";
 
 // --- Element References ---
@@ -16,10 +14,12 @@ const selectedFolderDisplay = document.getElementById(
 const selectedFolderIdInput = document.getElementById("selected-folder-id");
 const bookmarkDeleteBtn = document.getElementById("bookmark-delete-btn");
 const statusMessageElement = document.getElementById("status-message");
-// Close Selected Button Reference REMOVED
-// const closeSelectedTabsBtn = document.getElementById("close-selected-tabs-btn");
+
+// --- State ---
+let isBookmarking = false; // Flag to prevent concurrent operations
 
 // --- Bookmark Tree Rendering ---
+// buildBookmarkTreeLevel remains the same
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
     if (!node.url) {
@@ -66,6 +66,7 @@ function buildBookmarkTreeLevel(nodes, parentElement) {
   });
 }
 
+// renderBookmarkTree remains the same
 export async function renderBookmarkTree() {
   try {
     bookmarkTreeContainer.innerHTML = "<p>Loading folders...</p>"; // Show loading
@@ -102,6 +103,8 @@ export async function renderBookmarkTree() {
 }
 
 // --- Bookmarking Actions ---
+
+// createBookmarksInFolder remains the same
 async function createBookmarksInFolder(tabs, targetFolderId) {
   const successfullyBookmarkedTabs = [];
   let createdCount = 0;
@@ -111,6 +114,14 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
       continue;
     }
     try {
+      // Check if bookmark already exists (optional, but good practice)
+      // Note: chrome.bookmarks.search is async but might be slow for many checks
+      // const existing = await chrome.bookmarks.search({url: tab.url});
+      // if (existing.some(bm => bm.parentId === targetFolderId)) {
+      //     console.log(`Bookmark for ${tab.url} already exists in folder ${targetFolderId}, skipping.`);
+      //     continue;
+      // }
+
       await chrome.bookmarks.create({
         parentId: targetFolderId,
         title: tab.title || tab.url,
@@ -126,6 +137,8 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
           chrome.runtime.lastError.message
         );
       }
+      // Optional: Add specific error handling for "Bookmark URL already added" if needed
+      // if (error.message.includes("already bookmarked")) { ... }
     }
   }
   console.log(
@@ -134,9 +147,15 @@ async function createBookmarksInFolder(tabs, targetFolderId) {
   return successfullyBookmarkedTabs;
 }
 
+// *** Updated performBookmarkOperation ***
 async function performBookmarkOperation(shouldDeleteTabs = false) {
-  /* ... same as before, ensure it uses clearSelectedTabs correctly ... */
-  const selectedTabs = getSelectedTabData(); // Use getSelectedTabData to get objects with id, url, title
+  // ** Prevent concurrent execution **
+  if (isBookmarking) {
+    console.warn("Bookmarking operation already in progress. Ignoring click.");
+    return;
+  }
+
+  const selectedTabs = getSelectedTabData();
   const newFolderName = newFolderNameInput.value.trim();
   const parentFolderId = selectedFolderIdInput.value;
   const parentFolderName = selectedFolderDisplay.textContent;
@@ -158,15 +177,21 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
     return;
   }
 
+  // ** Set flag and disable buttons **
+  isBookmarking = true;
+  bookmarkSelectedBtn.disabled = true;
+  bookmarkDeleteBtn.disabled = true;
   setStatusMessage(statusMessageElement, "Bookmarking...");
 
   let targetFolderId;
   let successMessage;
   let bookmarkedTabs = [];
   let operationSucceeded = false;
+  let createdNewFolder = false; // Flag to track if a new folder was made in this run
 
   try {
     if (newFolderName === "") {
+      // Use existing selected folder
       targetFolderId = parentFolderId;
       bookmarkedTabs = await createBookmarksInFolder(
         selectedTabs,
@@ -183,41 +208,70 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
         );
       }
     } else {
-      const newFolder = await chrome.bookmarks.create({
-        parentId: parentFolderId,
-        title: newFolderName,
-      });
-      targetFolderId = newFolder.id;
-      bookmarkedTabs = await createBookmarksInFolder(
-        selectedTabs,
-        targetFolderId
-      );
-      if (bookmarkedTabs.length > 0) {
-        successMessage = `Bookmarked ${bookmarkedTabs.length} tab(s) to new folder "${newFolderName}".`;
-        operationSucceeded = true;
+      // Create a new folder first
+      try {
+        const newFolder = await chrome.bookmarks.create({
+          parentId: parentFolderId,
+          title: newFolderName,
+        });
+        targetFolderId = newFolder.id;
+        createdNewFolder = true; // Mark that we created it
+        console.log(
+          `Created new folder "${newFolderName}" with ID: ${targetFolderId}`
+        );
+
+        // Now add bookmarks to the newly created folder
+        bookmarkedTabs = await createBookmarksInFolder(
+          selectedTabs,
+          targetFolderId
+        );
+
+        if (bookmarkedTabs.length > 0) {
+          successMessage = `Bookmarked ${bookmarkedTabs.length} tab(s) to new folder "${newFolderName}".`;
+          operationSucceeded = true;
+        } else {
+          setStatusMessage(
+            statusMessageElement,
+            "Folder created, but no valid tabs were bookmarked.",
+            true
+          );
+        }
+      } catch (folderError) {
+        // Handle potential errors creating the folder (e.g., duplicate name?)
+        console.error("Error creating new bookmark folder:", folderError);
+        setStatusMessage(
+          statusMessageElement,
+          `Error creating folder: ${folderError.message}`,
+          true
+        );
+        // Don't proceed to bookmarking if folder creation failed
+        operationSucceeded = false;
+      }
+    }
+
+    // Post-bookmarking actions (clear selection, delete tabs, update UI)
+    if (operationSucceeded) {
+      setStatusMessage(statusMessageElement, successMessage);
+      newFolderNameInput.value = ""; // Clear input regardless of new folder creation
+
+      // Refresh tree if a new folder was successfully created
+      if (createdNewFolder) {
         await renderBookmarkTree();
+        // Try to re-select the parent folder after tree refresh
         const parentDetails = bookmarkTreeContainer.querySelector(
           `.bookmark-folder[data-folder-id="${parentFolderId}"] > .folder-details`
         );
         if (parentDetails) {
-          parentDetails.classList.add("selected");
-          selectedFolderDisplay.textContent =
-            parentDetails.querySelector(".folder-name").textContent;
-          selectedFolderDisplay.style.fontStyle = "normal";
+          parentDetails.click(); // Simulate click to select and potentially expand
+        } else {
+          // Reset selection if parent not found after refresh
+          selectedFolderIdInput.value = "";
+          selectedFolderDisplay.textContent = "Select a folder below...";
+          selectedFolderDisplay.style.fontStyle = "italic";
         }
-      } else {
-        setStatusMessage(
-          statusMessageElement,
-          "No valid tabs were bookmarked.",
-          true
-        );
       }
-    }
 
-    if (operationSucceeded) {
-      setStatusMessage(statusMessageElement, successMessage);
-      newFolderNameInput.value = "";
-
+      // Handle tab deletion if requested
       if (shouldDeleteTabs && bookmarkedTabs.length > 0) {
         setStatusMessage(
           statusMessageElement,
@@ -239,41 +293,58 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
             "Bookmarking succeeded, but error occurred during tab deletion.",
             true
           );
+          // Still clear selection even if delete fails partially
+          clearSelectedTabs();
         }
       } else {
-        clearSelectedTabs(); // Clear selection if not deleting
+        // Clear selection if not deleting tabs
+        clearSelectedTabs();
       }
     }
   } catch (error) {
+    // Catch any unexpected errors during the overall process
     console.error("Error during bookmark operation:", error);
     setStatusMessage(
       statusMessageElement,
-      `Error creating bookmarks: ${error.message}`,
+      `Error during bookmarking: ${error.message}`,
       true
     );
     if (chrome.runtime.lastError) {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
+  } finally {
+    // ** Always reset flag and re-enable buttons **
+    isBookmarking = false;
+    bookmarkSelectedBtn.disabled = false;
+    bookmarkDeleteBtn.disabled = false;
+    console.log("Bookmarking operation finished.");
   }
 }
 
-// Close Selected Tabs Action REMOVED from here
-// async function handleCloseSelectedTabsClick() { ... }
-
 // --- Setup ---
 export function setupBookmarksUI() {
+  // Check if listeners are already attached (simple check)
+  if (bookmarkSelectedBtn.dataset.listenerAttached === "true") {
+    console.warn("Bookmark listeners already attached. Skipping setup.");
+    return;
+  }
+
+  console.log("Attaching bookmark listeners.");
   bookmarkSelectedBtn.addEventListener("click", () =>
     performBookmarkOperation(false)
   );
   bookmarkDeleteBtn.addEventListener("click", () =>
     performBookmarkOperation(true)
   );
-  // Close Selected Button Listener REMOVED
-  // closeSelectedTabsBtn.addEventListener('click', handleCloseSelectedTabsClick);
   newFolderNameInput.addEventListener("keypress", (event) => {
     if (event.key === "Enter") {
+      // Optionally decide if Enter should also allow delete? Currently only bookmarks.
       performBookmarkOperation(false);
     }
   });
+
+  // Mark listeners as attached
+  bookmarkSelectedBtn.dataset.listenerAttached = "true";
+
   renderBookmarkTree(); // Initial render
 }

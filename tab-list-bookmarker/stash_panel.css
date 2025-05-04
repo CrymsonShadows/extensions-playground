@@ -97,10 +97,11 @@
 /* Individual stashed item */
 .stash-item {
   display: flex;
-  align-items: center;
-  padding: 8px 10px;
+  /* align-items: center; */ /* Changed to flex-start for better wrapping alignment */
+  align-items: flex-start; /* Align items to the top when title wraps */
+  padding: 12px 15px; /* Increased padding */
   border-bottom: 1px solid #eee;
-  gap: 8px;
+  gap: 10px; /* Increased gap */
   flex-shrink: 0; /* Prevent items from shrinking */
 }
 .stash-item:last-child {
@@ -110,10 +111,11 @@
 /* Status indicator (Read/Unread) */
 .stash-item-status {
   flex-shrink: 0;
-  font-size: 0.8em;
-  padding: 2px 5px;
+  font-size: 0.85em; /* Slightly larger status */
+  padding: 3px 6px; /* Increased padding */
   border-radius: 3px;
   white-space: nowrap;
+  margin-top: 2px; /* Add slight top margin to align better with wrapped text */
 }
 .stash-item-status.consumed {
   background-color: #e6f4ea; /* Light green */
@@ -136,20 +138,22 @@
 /* Container for title and URL */
 .stash-item-info {
   flex-grow: 1;
-  overflow: hidden; /* Prevent text overflow */
+  overflow: hidden; /* Keep this to prevent info container itself from overflowing */
 }
 
 /* Stashed item title (as a link) */
 .stash-item-title {
   display: block;
   font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.9em;
-  margin-bottom: 2px;
+  /* white-space: nowrap; */ /* REMOVED to allow wrapping */
+  white-space: normal; /* Allow wrapping */
+  /* overflow: hidden; */ /* REMOVED */
+  /* text-overflow: ellipsis; */ /* REMOVED */
+  font-size: 1em; /* Increased title font size */
+  margin-bottom: 4px; /* Increased margin */
   color: #333;
   text-decoration: none;
+  word-break: break-word; /* Help break long words if needed */
 }
 .stash-item-title:hover {
   text-decoration: underline;
@@ -159,34 +163,31 @@
 /* Stashed item URL (hostname) */
 .stash-item-url {
   display: block;
-  font-size: 0.8em;
+  font-size: 0.9em; /* Increased URL font size */
   color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap; /* Keep URL on one line */
+  overflow: hidden; /* Keep URL overflow hidden */
+  text-overflow: ellipsis; /* Keep URL ellipsis */
 }
 
 /* Stash count indicator */
 .stash-item-count {
-  font-size: 0.75em;
-  color: #888;
-  background-color: #eee;
-  padding: 1px 4px;
-  border-radius: 3px;
+  font-size: 0.9em; /* Increased count size */
+  font-weight: bold; /* Make count bold */
+  color: #555; /* Slightly darker color */
+  background-color: #e0e0e0; /* Slightly different background */
+  padding: 3px 7px; /* Increased padding */
+  border-radius: 4px; /* Slightly larger radius */
   flex-shrink: 0;
-  margin-left: 4px;
-  margin-right: auto; /* Push date and remove button to the right */
+  margin-left: 6px; /* Increased margin */
+  margin-right: auto; /* Push remove button to the right */
   white-space: nowrap;
+  margin-top: 1px; /* Align better with title */
 }
 
-/* Date stashed */
+/* Date stashed - Hide this element */
 .stash-item-date {
-  font-size: 0.75em;
-  color: #888;
-  flex-shrink: 0;
-  text-align: right;
-  margin-left: 0; /* Reset margin */
-  white-space: nowrap; /* Prevent wrapping */
+  display: none; /* Hide the date */
 }
 
 /* Remove button for stashed items */
@@ -194,16 +195,16 @@
   background: none;
   border: none;
   color: #dc3545; /* Red color for delete */
-  font-size: 1.4em; /* Make it larger */
+  font-size: 1.5em; /* Slightly larger remove button */
   font-weight: bold;
   cursor: pointer;
-  padding: 0 6px; /* Adjust padding */
-  margin-left: 5px; /* Space from date */
+  padding: 0 8px; /* Increased padding */
+  margin-left: 8px; /* Increased space from count/info */
   line-height: 1;
   opacity: 0.6;
   transition: opacity 0.2s ease, color 0.2s ease;
   order: 5; /* Ensure it appears last in flex layout */
-  align-self: center; /* Vertically center */
+  align-self: center; /* Vertically center the button itself */
   flex-shrink: 0;
 }
 .stash-item-remove-btn:hover {
