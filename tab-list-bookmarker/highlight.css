@@ -1,0 +1,29 @@
+/* highlight.css - Styles for the stashed link highlighter */
+
+/*
+ * Use a distinct but not overly distracting style.
+ * Avoid changing layout (e.g., adding borders that shift elements).
+ * Use !important sparingly, only if necessary to override page styles.
+ */
+.stashed-link-highlight {
+  background-color: rgba(
+    255,
+    243,
+    128,
+    0.6
+  ) !important; /* Light yellow, slightly transparent */
+  outline: 1px dashed rgba(255, 165, 0, 0.7) !important; /* Dashed orange outline, slightly transparent */
+  outline-offset: 1px; /* Small offset so outline doesn't touch text */
+  border-radius: 2px; /* Slightly rounded corners */
+  /* Optional: Add a subtle transition */
+  transition: background-color 0.3s ease, outline-color 0.3s ease;
+
+  /* Ensure text color remains readable - inherit is usually best */
+  color: inherit !important;
+}
+
+/* Optional: Slightly stronger hover effect for highlighted links */
+.stashed-link-highlight:hover {
+  background-color: rgba(255, 243, 128, 0.8) !important;
+  outline-color: rgba(255, 165, 0, 0.9) !important;
+}

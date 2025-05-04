@@ -31,7 +31,8 @@
                          <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
                          <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
                          </div>
-                    <p id="status-message" class="status-message"></p> </div>
+                    <p id="status-message" class="status-message"></p>
+                </div>
 
                 <div id="group-settings" class="tab-panel">
                      <h3>Move Selected Tabs to Group</h3>
@@ -53,7 +54,8 @@
                      <h3>Auto Group All Tabs</h3>
                      <button id="group-by-domain-btn" class="btn auto-group-btn">Group Ungrouped by Domain</button>
                      <button id="regroup-all-by-domain-btn" class="btn auto-group-btn">Regroup ALL by Domain</button>
-                     <p id="group-status-message" class="status-message"></p> </div>
+                     <p id="group-status-message" class="status-message"></p>
+                </div>
 
                 <div id="stash-settings" class="tab-panel">
                     <h3>Stash / Read Later</h3>
@@ -61,7 +63,8 @@
                         <button id="stash-current-tab-btn" class="btn stash-btn">Stash Current Tab</button>
                         <button id="mark-consumed-btn" class="btn consumed-btn">Mark Current as Consumed</button>
                     </div>
-                    <p id="stash-status-message" class="status-message"></p> <hr class="section-divider">
+                    <p id="stash-status-message" class="status-message"></p>
+                    <hr class="section-divider">
 
                     <h3>Stashed Items</h3>
                     <div class="stash-controls">
@@ -78,6 +81,9 @@
                             <option value="consumedFalse">Status (Unread First)</option>
                             <option value="consumedTrue">Status (Read First)</option>
                         </select>
+                        <button id="highlight-toggle-btn" class="btn toggle-btn" title="Toggle highlighting of links on the current page that point to stashed URLs">
+                            Highlight Links
+                        </button>
                     </div>
                     <div id="stash-list" class="stash-list">
                         <p>Loading stashed items...</p>
@@ -85,6 +91,7 @@
                 </div>
             </div>
         </div>
+
         <div class="tabs-header">
              <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
              <div class="tab-header-controls">

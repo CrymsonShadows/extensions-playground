@@ -323,3 +323,24 @@ export async function updateStashItemConsumedDB(urlToMark, consumedStatus) {
     transaction.oncomplete = () => db.close();
   });
 }
+
+// Add this function to db.js
+export async function getAllStashUrlsDB() {
+  const db = await openDB(); // Use your existing openDB function
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    // No index needed if just iterating, but could use URL index if preferred
+    const request = store.getAll(); // Get all items
+
+    request.onerror = (event) =>
+      reject("Error fetching all stash URLs: " + request.error);
+    request.onsuccess = (event) => {
+      const items = event.target.result;
+      // Extract only the URLs
+      const urls = items.map((item) => item.url);
+      resolve(urls);
+    };
+    transaction.oncomplete = () => db.close();
+  });
+}
