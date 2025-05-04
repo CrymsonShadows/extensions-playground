@@ -4,8 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tab Manager</title>
-    <link rel="stylesheet" href="style.css">
-</head>
+    <link rel="stylesheet" href="base.css">
+    <link rel="stylesheet" href="action_tabs.css">
+    <link rel="stylesheet" href="tab_list.css">
+    <link rel="stylesheet" href="bookmark_panel.css">
+    <link rel="stylesheet" href="group_panel.css">
+    <link rel="stylesheet" href="stash_panel.css">
+    </head>
 <body>
     <div class="container">
 
@@ -30,7 +35,7 @@
                     <div class="button-group">
                          <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
                          <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
-                         </div>
+                    </div>
                     <p id="status-message" class="status-message"></p>
                 </div>
 
@@ -46,7 +51,7 @@
                           <input type="text" id="new-group-name" placeholder="Optional group name" class="input-field">
                           <label for="new-group-color">New Group Color:</label>
                           <select id="new-group-color" class="input-field">
-                             </select>
+                              </select>
                      </div>
 
                      <button id="move-to-group-btn" class="btn group-btn">Move Selected to Group</button>
@@ -82,12 +87,11 @@
                             <option value="consumedTrue">Status (Read First)</option>
                         </select>
                         <button id="highlight-toggle-btn" class="btn toggle-btn" title="Toggle highlighting of links on the current page that point to stashed URLs">
-                            Highlight Links
-                        </button>
+                            Highlight Links </button>
                     </div>
                     <div id="stash-list" class="stash-list">
                         <p>Loading stashed items...</p>
-                    </div>
+                        </div>
                 </div>
             </div>
         </div>
@@ -105,7 +109,7 @@
         <p id="tab-list-status-message" class="status-message"></p>
         <div id="tab-list" class="tab-list">
             <p>Loading tabs...</p>
-        </div>
+            </div>
     </div>
 
     <script type="module" src="sidebar.js"></script>

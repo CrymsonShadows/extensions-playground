@@ -1,0 +1,107 @@
+/* bookmark_panel.css - Styles for the Bookmark action panel */
+
+/* Display area for the selected folder */
+.selected-folder-display {
+  padding: 8px 6px;
+  margin-bottom: 5px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #fff;
+  font-size: 0.9em;
+  color: #333;
+  min-height: 1.2em;
+  font-style: italic; /* Initially italic */
+}
+
+/* Container for the bookmark folder tree */
+.bookmark-tree-container {
+  max-height: 150px; /* Limit height and enable scroll */
+  overflow-y: auto;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px;
+  background-color: #fff;
+  margin-bottom: 10px;
+}
+
+/* Individual folder item in the tree */
+.bookmark-folder {
+  margin-left: 15px; /* Indentation for nesting */
+  position: relative;
+}
+
+/* Clickable area for folder details (name, expand icon) */
+.bookmark-folder > .folder-details {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.bookmark-folder > .folder-details:hover {
+  background-color: #eef; /* Light blue hover */
+}
+
+/* Expand/Collapse indicator (+/-) */
+.bookmark-folder > .folder-details::before {
+  content: "+"; /* Default to collapsed */
+  display: inline-block;
+  width: 1em;
+  margin-right: 5px;
+  font-weight: bold;
+  color: #666;
+  text-align: center;
+  transition: transform 0.1s ease-in-out;
+}
+.bookmark-folder.has-children.expanded > .folder-details::before {
+  content: "-"; /* Expanded state */
+  transform: rotate(45deg); /* Optional rotation */
+}
+/* Hide indicator if no children */
+.bookmark-folder:not(.has-children) > .folder-details::before {
+  content: ""; /* No indicator */
+  width: calc(1em + 5px); /* Maintain spacing */
+}
+
+/* Folder name text */
+.folder-name {
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Container for child folders (hidden by default) */
+.child-folders {
+  display: none;
+}
+.bookmark-folder.expanded > .child-folders {
+  display: block; /* Show children when expanded */
+}
+
+/* Highlight style for the selected folder */
+.bookmark-folder > .folder-details.selected {
+  background-color: #d6eaff; /* Highlight color */
+  font-weight: bold;
+}
+
+/* Specific button styles */
+.btn.bookmark-btn {
+  background-color: #5cb85c; /* Green */
+  color: white;
+  border-color: #4cae4c;
+}
+.btn.bookmark-btn:hover {
+  background-color: #4cae4c;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn.delete-btn {
+  background-color: #d9534f; /* Red */
+  color: white;
+  border-color: #c9302c;
+}
+.btn.delete-btn:hover {
+  background-color: #c9302c;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}

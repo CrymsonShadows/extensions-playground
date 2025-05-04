@@ -1,0 +1,44 @@
+/* group_panel.css - Styles for the Group Tabs action panel */
+
+/* Container for new group options (name, color) */
+.new-group-options {
+  padding-left: 10px;
+  border-left: 2px solid #ccc;
+  margin-left: 5px;
+  margin-bottom: 10px;
+  padding-top: 5px;
+}
+/* Hidden class is defined in base.css */
+/* .new-group-options.hidden { display: none; } */
+
+/* Specific button styles */
+.btn.group-btn {
+  background-color: #5bc0de; /* Info blue */
+  color: white;
+  border-color: #46b8da;
+  width: 100%; /* Make button full width */
+  margin-top: 5px;
+}
+.btn.group-btn:hover {
+  background-color: #31b0d5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn.auto-group-btn {
+  background-color: #6c757d; /* Secondary grey */
+  color: white;
+  border-color: #5a6268;
+  width: 100%; /* Make button full width */
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+.btn.auto-group-btn:hover {
+  background-color: #5a6268;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Add specific styles for the group color select if needed */
+#new-group-color option {
+  /* Background color set dynamically in JS */
+  padding: 2px 5px;
+}

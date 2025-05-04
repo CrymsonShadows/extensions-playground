@@ -1,0 +1,68 @@
+/* action_tabs.css - Styles for the main action tab switcher */
+
+.action-tabs-container {
+  background-color: #e9edf0;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  flex-shrink: 0; /* Prevent shrinking */
+  border: 1px solid #ddd;
+  overflow: hidden; /* Contains content */
+}
+
+.tab-buttons {
+  display: flex;
+  background-color: #dde3e8;
+}
+
+.tab-btn {
+  flex-grow: 1;
+  padding: 10px 5px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  text-align: center;
+  font-weight: bold;
+  color: #555;
+  border-bottom: 3px solid transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.tab-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.tab-btn.active {
+  color: #1a73e8;
+  border-bottom-color: #1a73e8;
+  background-color: #e9edf0; /* Match panel background */
+}
+
+.tab-content {
+  padding: 10px;
+}
+
+.tab-panel {
+  display: none; /* Hidden by default */
+  border-top: 1px solid #ddd;
+  padding-top: 10px;
+  margin-top: -1px; /* Overlap border */
+}
+
+.tab-panel.active {
+  display: block; /* Show active panel */
+}
+
+/* Panel-specific headings */
+.tab-panel h3 {
+  margin-top: 0;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Panel-specific labels */
+.tab-panel label {
+  display: block;
+  font-size: 0.85em;
+  margin-bottom: 3px;
+  color: #555;
+  font-weight: bold;
+}

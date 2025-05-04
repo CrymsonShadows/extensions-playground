@@ -1,0 +1,220 @@
+/* tab_list.css - Styles for the current tabs list */
+
+/* Header containing "Current Tabs" and "Select All" */
+.tabs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+  padding-right: 5px;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+.tabs-header h2 {
+  margin-bottom: 0;
+  border-bottom: none;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-grow: 1; /* Allow title to take space */
+}
+.selected-count-display {
+  font-size: 0.8em;
+  font-weight: normal;
+  color: #555;
+  background-color: #e0e0e0;
+  padding: 2px 5px;
+  border-radius: 4px;
+  display: inline-block;
+  min-width: 10px;
+  text-align: center;
+}
+
+/* Container for header controls (Select All, Close Button) */
+.tab-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px; /* Space between select all and close button */
+  flex-shrink: 0; /* Prevent controls from shrinking */
+}
+
+.select-all-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.select-all-container label {
+  font-size: 0.85em;
+  color: #555;
+  cursor: pointer;
+  user-select: none;
+}
+#select-all-checkbox {
+  cursor: pointer;
+  accent-color: #5cb85c; /* Green accent for checkboxes */
+}
+
+/* Specific style for the close button in the header */
+.btn-icon.close-btn {
+  font-weight: bold;
+}
+.btn-icon.close-btn:hover {
+  color: #d9534f; /* Red on hover */
+  background-color: #fbeae9; /* Light red background on hover */
+}
+
+/* Status message specific to tab list area */
+#tab-list-status-message {
+  margin-top: 5px; /* Less margin than panel status */
+  margin-bottom: 5px;
+  padding: 0 5px; /* Add padding */
+}
+
+/* The main list container */
+#tab-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 15px 0;
+  overflow-y: auto; /* Enable vertical scrolling */
+  flex-grow: 1; /* Allow list to fill available space */
+  border: 1px solid #eee;
+  background-color: #fff;
+  border-radius: 4px;
+}
+
+/* Styling for Tab Group Headers */
+.tab-group-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 5px;
+  margin-top: 5px;
+  position: sticky; /* Keep headers visible when scrolling */
+  top: 0;
+  z-index: 1;
+  /* Background and border set dynamically */
+}
+.tab-group-header:first-child {
+  margin-top: 0;
+}
+.tab-group-header input[type="checkbox"].group-checkbox {
+  margin-right: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #5cb85c; /* Green accent */
+}
+.group-color-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.2); /* Subtle border */
+}
+.group-title {
+  flex-grow: 1;
+  font-weight: bold;
+  font-size: 0.9em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #333;
+}
+
+/* Styling for individual tab items */
+.tab-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 5px 8px 15px; /* Default padding */
+  margin-bottom: 1px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+  color: #333;
+}
+.tab-item:last-child {
+  border-bottom: none;
+}
+/* Hover effect for ungrouped tabs */
+.tab-item:not([style*="background-color"]):hover {
+  background-color: #e9e9e9;
+}
+/* Hover effect for grouped tabs (adds slight overlay) */
+.tab-item[style*="background-color"]:hover {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05));
+}
+
+/* Adjustments for tabs within groups (dynamic styles applied in JS) */
+.tab-item.in-group {
+  /* border-left: 4px solid transparent; /* Set dynamically */
+  /* padding-left: 21px; /* Adjusted dynamically */
+}
+
+/* Tab item checkbox */
+.tab-item input[type="checkbox"] {
+  margin-right: 8px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #5cb85c; /* Green accent */
+}
+
+/* Tab favicon */
+.tab-favicon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* Container for title and fetch button */
+.tab-title-container {
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  overflow: hidden; /* Prevent title overflow */
+  margin-right: 8px;
+}
+
+/* Tab title text */
+.tab-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+  cursor: default; /* Indicate it's not directly clickable */
+}
+
+/* Button to fetch title for suspended tabs */
+.fetch-title-btn {
+  background: none;
+  border: none;
+  padding: 0 4px;
+  margin-right: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  color: #555;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.fetch-title-btn:hover {
+  color: #1a73e8; /* Blue on hover */
+}
+/* Inherits .loading animation from base.css */
+
+/* Individual tab close button */
+.close-tab-btn {
+  background: none;
+  border: none;
+  color: #555;
+  font-size: 1.2em;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 5px;
+  margin-left: auto; /* Push to the right */
+  flex-shrink: 0;
+  line-height: 1;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, color 0.2s ease;
+}
+.close-tab-btn:hover {
+  color: #d9534f; /* Red on hover */
+  opacity: 1;
+}
