@@ -1,6 +1,6 @@
 // tabs_ui.js
 import { groupColorMap, groupBackgroundColorMap } from "./constants.js";
-import { getOriginalTabInfo, setStatusMessage } from "./utils.js";
+import { getOriginalTabInfo, setStatusMessage, debounce } from "./utils.js"; // Import debounce
 import { handleFetchTitleClick } from "./ui.js";
 
 // --- In-memory state for checked tabs ---
@@ -16,6 +16,7 @@ const headerCloseSelectedBtn = document.getElementById(
 const tabListStatusMessageElement = document.getElementById(
   "tab-list-status-message"
 );
+const tabSearchInput = document.getElementById("tab-search-input"); // NEW: Search input
 
 // --- Checkbox State Management ---
 // handleCheckboxChange, handleGroupCheckboxChange, handleSelectAllChange,
@@ -37,7 +38,7 @@ function handleCheckboxChange(event) {
   } else {
     checkedTabIds.delete(tabId);
   }
-  updateSelectAllCheckboxState(); // Update parent checkboxes/counts
+  updateSelectAllCheckboxState();
 }
 
 function handleGroupCheckboxChange(event) {
@@ -59,7 +60,7 @@ function handleGroupCheckboxChange(event) {
       checkedTabIds.delete(tabId);
     }
   });
-  updateSelectAllCheckboxState(); // Update parent states
+  updateSelectAllCheckboxState();
 }
 
 function handleSelectAllChange() {
@@ -84,81 +85,112 @@ function handleSelectAllChange() {
     groupCheckbox.checked = isChecked;
     groupCheckbox.indeterminate = false;
   });
-  updateSelectAllCheckboxState(); // Update parent states
+  updateSelectAllCheckboxState();
 }
 
 function updateSelectAllCheckboxState() {
-  const allTabCheckboxes = tabListElement.querySelectorAll(
-    '.tab-item input[type="checkbox"]'
+  // Query only visible checkboxes after potential filtering
+  const visibleTabCheckboxes = tabListElement.querySelectorAll(
+    '.tab-item:not(.hidden) input[type="checkbox"]'
   );
-  const totalTabs = allTabCheckboxes.length;
-  const totalSelectedTabs = tabListElement.querySelectorAll(
-    '.tab-item input[type="checkbox"]:checked'
+  const totalVisibleTabs = visibleTabCheckboxes.length;
+  const totalSelectedVisibleTabs = tabListElement.querySelectorAll(
+    '.tab-item:not(.hidden) input[type="checkbox"]:checked'
   ).length;
-  selectedCountSpan.textContent = `(${totalSelectedTabs})`;
-  let allGroupsChecked = true;
-  let noGroupsChecked = true;
-  let anyGroupIndeterminate = false;
-  const groupHeaders = tabListElement.querySelectorAll(".tab-group-header");
+
+  // Update selected count display based on *all* selected tabs (not just visible)
+  selectedCountSpan.textContent = `(${checkedTabIds.size})`;
+
+  let allVisibleGroupsChecked = true;
+  let noVisibleGroupsChecked = true;
+  let anyVisibleGroupIndeterminate = false;
+
+  const groupHeaders = tabListElement.querySelectorAll(
+    ".tab-group-header:not(.hidden)"
+  ); // Consider only visible headers
   groupHeaders.forEach((header) => {
     const groupId = header.dataset.groupId;
     const groupCheckbox = header.querySelector(".group-checkbox");
+    // Check only visible tabs within this group
     const memberTabCheckboxes = tabListElement.querySelectorAll(
-      `.tab-item input[type="checkbox"][data-group-id="${groupId}"]`
+      `.tab-item:not(.hidden) input[type="checkbox"][data-group-id="${groupId}"]`
     );
-    const totalInGroup = memberTabCheckboxes.length;
-    const selectedInGroup = tabListElement.querySelectorAll(
-      `.tab-item input[type="checkbox"][data-group-id="${groupId}"]:checked`
+    const totalVisibleInGroup = memberTabCheckboxes.length;
+    const selectedVisibleInGroup = tabListElement.querySelectorAll(
+      `.tab-item:not(.hidden) input[type="checkbox"][data-group-id="${groupId}"]:checked`
     ).length;
-    if (totalInGroup > 0) {
-      if (selectedInGroup === totalInGroup) {
+
+    if (totalVisibleInGroup > 0) {
+      if (selectedVisibleInGroup === totalVisibleInGroup) {
         groupCheckbox.checked = true;
         groupCheckbox.indeterminate = false;
-        noGroupsChecked = false;
-      } else if (selectedInGroup === 0) {
+        noVisibleGroupsChecked = false;
+      } else if (selectedVisibleInGroup === 0) {
         groupCheckbox.checked = false;
         groupCheckbox.indeterminate = false;
-        allGroupsChecked = false;
+        allVisibleGroupsChecked = false;
       } else {
         groupCheckbox.checked = false;
         groupCheckbox.indeterminate = true;
-        allGroupsChecked = false;
-        noGroupsChecked = false;
-        anyGroupIndeterminate = true;
+        allVisibleGroupsChecked = false;
+        noVisibleGroupsChecked = false;
+        anyVisibleGroupIndeterminate = true;
       }
+      groupCheckbox.disabled = false;
     } else {
+      // If no visible tabs in group, uncheck and disable group checkbox
       groupCheckbox.checked = false;
       groupCheckbox.indeterminate = false;
       groupCheckbox.disabled = true;
+      // Don't factor this group into the overall select-all state
     }
   });
+
+  // Check visible ungrouped tabs
   const ungroupedCheckboxes = tabListElement.querySelectorAll(
-    `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]`
+    `.tab-item:not(.hidden) input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]`
   );
-  const totalUngrouped = ungroupedCheckboxes.length;
-  const selectedUngrouped = tabListElement.querySelectorAll(
-    `.tab-item input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]:checked`
+  const totalVisibleUngrouped = ungroupedCheckboxes.length;
+  const selectedVisibleUngrouped = tabListElement.querySelectorAll(
+    `.tab-item:not(.hidden) input[type="checkbox"][data-group-id="${chrome.tabGroups.TAB_GROUP_ID_NONE}"]:checked`
   ).length;
-  let allUngroupedChecked =
-    totalUngrouped > 0 && selectedUngrouped === totalUngrouped;
-  let noUngroupedChecked = selectedUngrouped === 0;
-  if (totalTabs === 0) {
+
+  let allVisibleUngroupedChecked =
+    totalVisibleUngrouped > 0 &&
+    selectedVisibleUngrouped === totalVisibleUngrouped;
+  let noVisibleUngroupedChecked = selectedVisibleUngrouped === 0;
+
+  // Determine Select All state based on *visible* items
+  if (totalVisibleTabs === 0) {
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
     selectAllCheckbox.disabled = true;
   } else {
     selectAllCheckbox.disabled = false;
-    if (allGroupsChecked && (totalUngrouped === 0 || allUngroupedChecked)) {
+    // Check if all visible groups (that have visible tabs) are fully checked AND all visible ungrouped are checked
+    const allRelevantGroupsChecked = [...groupHeaders].every((header) => {
+      const groupCheckbox = header.querySelector(".group-checkbox");
+      return groupCheckbox.disabled || groupCheckbox.checked; // Ignore disabled (empty) groups
+    });
+
+    if (
+      allRelevantGroupsChecked &&
+      (totalVisibleUngrouped === 0 || allVisibleUngroupedChecked)
+    ) {
       selectAllCheckbox.checked = true;
       selectAllCheckbox.indeterminate = false;
-    } else if (
-      noGroupsChecked &&
-      (totalUngrouped === 0 || noUngroupedChecked) &&
-      !anyGroupIndeterminate
+    }
+    // Check if no visible groups (with visible tabs) are checked/indeterminate AND no visible ungrouped are checked
+    else if (
+      noVisibleGroupsChecked &&
+      !anyVisibleGroupIndeterminate &&
+      (totalVisibleUngrouped === 0 || noVisibleUngroupedChecked)
     ) {
       selectAllCheckbox.checked = false;
       selectAllCheckbox.indeterminate = false;
-    } else {
+    }
+    // Otherwise, indeterminate
+    else {
       selectAllCheckbox.checked = false;
       selectAllCheckbox.indeterminate = true;
     }
@@ -168,10 +200,10 @@ function updateSelectAllCheckboxState() {
 // --- Tab Actions ---
 // closeTab, handleCloseSelectedTabsClick remain the same
 async function closeTab(tabId) {
-  checkedTabIds.delete(tabId); // Remove from state first
+  checkedTabIds.delete(tabId);
   try {
     await chrome.tabs.remove(tabId);
-    // The onRemoved listener in sidebar.js will trigger renderTabs (debounced)
+    // Listener in sidebar.js triggers debouncedRenderTabs
   } catch (error) {
     if (!error.message.toLowerCase().includes("no tab with id")) {
       console.error(`Error closing tab ${tabId}:`, error);
@@ -188,13 +220,12 @@ async function closeTab(tabId) {
       }
     } else {
       console.log(`Tab ${tabId} already closed.`);
-      // renderTabs(); // Re-render no longer needed here, handled by debounced listener
     }
   }
 }
 
 async function handleCloseSelectedTabsClick() {
-  const selectedIdsSet = getSelectedTabIds(); // Get the Set of IDs
+  const selectedIdsSet = getSelectedTabIds();
   if (selectedIdsSet.size === 0) {
     setStatusMessage(
       tabListStatusMessageElement,
@@ -204,7 +235,7 @@ async function handleCloseSelectedTabsClick() {
     return;
   }
 
-  const tabIdsToClose = Array.from(selectedIdsSet); // Convert Set to Array for API call
+  const tabIdsToClose = Array.from(selectedIdsSet);
   setStatusMessage(
     tabListStatusMessageElement,
     `Closing ${tabIdsToClose.length} selected tab(s)...`
@@ -213,11 +244,11 @@ async function handleCloseSelectedTabsClick() {
 
   try {
     await chrome.tabs.remove(tabIdsToClose);
-    // The onRemoved listener in sidebar.js handles cleanup and re-render (debounced)
     setStatusMessage(
       tabListStatusMessageElement,
       `Closed ${tabIdsToClose.length} tab(s).`
     );
+    // Listener handles re-render
   } catch (error) {
     console.error("Error closing selected tabs:", error);
     setStatusMessage(
@@ -232,14 +263,7 @@ async function handleCloseSelectedTabsClick() {
 }
 
 // --- Tab List Rendering ---
-
-/**
- * Creates the DOM element for a single tab item.
- * @param {chrome.tabs.Tab} tab - The Chrome tab object.
- * @param {boolean} isInGroup - Whether the tab is part of a group.
- * @param {string|null} groupColorName - The color name of the group, if any.
- * @returns {HTMLElement} The created tab item div.
- */
+// createTabItemElement remains the same
 function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
   const listItem = document.createElement("div");
   listItem.className = "tab-item" + (isInGroup ? " in-group" : "");
@@ -248,119 +272,123 @@ function createTabItemElement(tab, isInGroup = false, groupColorName = null) {
 
   const originalInfo = getOriginalTabInfo(tab.url, tab.title);
 
-  // Apply group-specific styling
   if (isInGroup && groupColorName && groupBackgroundColorMap[groupColorName]) {
     listItem.style.backgroundColor = groupBackgroundColorMap[groupColorName];
     listItem.style.borderLeft = `4px solid ${groupColorMap[groupColorName]}`;
     listItem.style.paddingLeft = "21px";
   } else {
-    listItem.style.paddingLeft = "15px"; // Default padding for ungrouped
+    listItem.style.paddingLeft = "15px";
   }
 
-  // Checkbox
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.dataset.tabId = tab.id;
   checkbox.dataset.groupId = tab.groupId;
   checkbox.dataset.tabUrl = originalInfo.url;
   checkbox.dataset.tabTitle = originalInfo.title;
-  checkbox.checked = checkedTabIds.has(tab.id); // Restore checked state
+  checkbox.checked = checkedTabIds.has(tab.id);
   checkbox.addEventListener("change", handleCheckboxChange);
   listItem.appendChild(checkbox);
 
-  // Favicon
   const favicon = document.createElement("img");
   favicon.className = "tab-favicon";
-  favicon.src = tab.favIconUrl || "icons/default_favicon.png"; // Use default if missing
+  favicon.src = tab.favIconUrl || "icons/default_favicon.png";
   favicon.alt = "";
   favicon.onerror = () => {
-    // Fallback if favicon fails to load
     favicon.src = "icons/default_favicon.png";
   };
   listItem.appendChild(favicon);
 
-  // Title Container (holds title and potentially fetch button)
   const titleContainer = document.createElement("div");
   titleContainer.className = "tab-title-container";
 
-  // Fetch Title Button (if needed for suspended tabs)
   if (originalInfo.needsTitleFetch) {
     const fetchBtn = document.createElement("button");
     fetchBtn.className = "fetch-title-btn";
-    fetchBtn.innerHTML = "🔄"; // Refresh symbol
+    fetchBtn.innerHTML = "🔄";
     fetchBtn.title = "Load tab to get title";
     fetchBtn.dataset.tabId = tab.id;
     fetchBtn.dataset.originalUrl = originalInfo.url;
-    fetchBtn.addEventListener("click", handleFetchTitleClick); // Use imported handler
+    fetchBtn.addEventListener("click", handleFetchTitleClick);
     titleContainer.appendChild(fetchBtn);
   }
 
-  // Title Span
   const title = document.createElement("span");
   title.className = "tab-title";
-  title.textContent = originalInfo.title || originalInfo.url; // Display URL if title missing
-  title.title = originalInfo.title || originalInfo.url; // Tooltip
+  title.textContent = originalInfo.title || originalInfo.url;
+  title.title = originalInfo.title || originalInfo.url;
   titleContainer.appendChild(title);
   listItem.appendChild(titleContainer);
 
-  // Close Button
   const closeButton = document.createElement("button");
   closeButton.className = "close-tab-btn";
-  closeButton.innerHTML = "&times;"; // Multiplication sign for 'x'
+  closeButton.innerHTML = "&times;";
   closeButton.title = "Close Tab";
   closeButton.addEventListener("click", (event) => {
-    event.stopPropagation(); // Prevent triggering other clicks on the item
+    event.stopPropagation();
     closeTab(tab.id);
   });
   listItem.appendChild(closeButton);
 
-  return listItem; // Return the created element
+  return listItem;
 }
 
+// *** UPDATED renderTabs function ***
 export async function renderTabs() {
-  // console.time("renderTabs"); // Start performance timer
-
-  // Cleanup checked state for closed tabs before fetching current ones
+  // Cleanup checked state (no changes needed here)
   try {
     const openTabsRaw = await chrome.tabs.query({
       windowId: chrome.windows.WINDOW_ID_CURRENT,
     });
     const openTabIds = new Set(openTabsRaw.map((tab) => tab.id));
-    // Filter the existing checkedTabIds Set
     checkedTabIds = new Set(
       [...checkedTabIds].filter((id) => openTabIds.has(id))
     );
   } catch (error) {
     console.error("Error fetching open tabs for cleanup:", error);
-    // Proceed even if cleanup fails, but log the error
   }
 
-  // Fetch current tabs and groups
+  // Get search term
+  const searchTerm = tabSearchInput.value.toLowerCase().trim();
+
   try {
-    const [tabs, groups] = await Promise.all([
+    const [allTabs, groups] = await Promise.all([
       chrome.tabs.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
       chrome.tabGroups.query({ windowId: chrome.windows.WINDOW_ID_CURRENT }),
     ]);
 
-    // *** Use DocumentFragment for batch appending ***
+    // *** Filter tabs based on search term ***
+    const filteredTabs = searchTerm
+      ? allTabs.filter((tab) => {
+          const info = getOriginalTabInfo(tab.url, tab.title);
+          const titleMatch =
+            info.title && info.title.toLowerCase().includes(searchTerm);
+          const urlMatch =
+            info.url && info.url.toLowerCase().includes(searchTerm);
+          return titleMatch || urlMatch;
+        })
+      : allTabs; // If no search term, use all tabs
+
     const fragment = document.createDocumentFragment();
 
-    if (tabs.length === 0) {
+    if (filteredTabs.length === 0) {
       const noTabsPara = document.createElement("p");
-      noTabsPara.textContent = "No tabs found.";
+      noTabsPara.textContent = searchTerm
+        ? "No tabs match your search."
+        : "No tabs found.";
       fragment.appendChild(noTabsPara);
       selectAllCheckbox.checked = false;
       selectAllCheckbox.disabled = true;
-      checkedTabIds.clear(); // Ensure state is clear
+      // Don't clear checkedTabIds here, filter might just hide them
     } else {
-      selectAllCheckbox.disabled = false; // Enable checkbox if tabs exist
+      selectAllCheckbox.disabled = false;
 
       const groupMap = new Map(groups.map((group) => [group.id, group]));
       const tabsByGroup = new Map();
       const ungroupedTabs = [];
 
-      // Sort tabs into groups and ungrouped list
-      tabs.forEach((tab) => {
+      // Sort *filtered* tabs into groups
+      filteredTabs.forEach((tab) => {
         if (
           tab.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE &&
           groupMap.has(tab.groupId)
@@ -374,70 +402,67 @@ export async function renderTabs() {
         }
       });
 
-      // Render groups and their tabs to the fragment
+      // Keep track of rendered group headers
+      const renderedGroupHeaders = new Set();
+
+      // Render groups *only if they contain filtered tabs*
       groups.forEach((group) => {
         const groupTabs = tabsByGroup.get(group.id);
-        if (!groupTabs || groupTabs.length === 0) return; // Skip empty groups
+        // Check if this group has any tabs *after filtering*
+        if (groupTabs && groupTabs.length > 0) {
+          // Create and append group header
+          const header = document.createElement("div");
+          header.className = "tab-group-header";
+          header.dataset.groupId = group.id;
+          // Style header as before...
+          header.style.backgroundColor =
+            groupBackgroundColorMap[group.color] || "#F1F3F4";
+          header.style.borderBottom = `1px solid ${
+            groupColorMap[group.color] || "#DADCE0"
+          }`;
+          const groupCheckbox = document.createElement("input");
+          groupCheckbox.type = "checkbox";
+          groupCheckbox.title = `Select/Deselect Group: ${
+            group.title || "Unnamed Group"
+          }`;
+          groupCheckbox.dataset.groupId = group.id;
+          groupCheckbox.className = "group-checkbox";
+          groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
+          header.appendChild(groupCheckbox);
+          const colorIndicator = document.createElement("span");
+          colorIndicator.className = "group-color-indicator";
+          colorIndicator.style.backgroundColor =
+            groupColorMap[group.color] || "#DADCE0";
+          header.appendChild(colorIndicator);
+          const groupTitle = document.createElement("span");
+          groupTitle.className = "group-title";
+          groupTitle.textContent = group.title || "Unnamed Group";
+          header.appendChild(groupTitle);
+          fragment.appendChild(header); // Append header to fragment
+          renderedGroupHeaders.add(group.id); // Mark header as rendered
 
-        // Create and append group header
-        const header = document.createElement("div");
-        header.className = "tab-group-header";
-        header.dataset.groupId = group.id;
-        header.style.backgroundColor =
-          groupBackgroundColorMap[group.color] || "#F1F3F4";
-        header.style.borderBottom = `1px solid ${
-          groupColorMap[group.color] || "#DADCE0"
-        }`;
-
-        const groupCheckbox = document.createElement("input");
-        groupCheckbox.type = "checkbox";
-        groupCheckbox.title = `Select/Deselect Group: ${
-          group.title || "Unnamed Group"
-        }`;
-        groupCheckbox.dataset.groupId = group.id;
-        groupCheckbox.className = "group-checkbox";
-        groupCheckbox.addEventListener("change", handleGroupCheckboxChange);
-        header.appendChild(groupCheckbox);
-
-        const colorIndicator = document.createElement("span");
-        colorIndicator.className = "group-color-indicator";
-        colorIndicator.style.backgroundColor =
-          groupColorMap[group.color] || "#DADCE0";
-        header.appendChild(colorIndicator);
-
-        const groupTitle = document.createElement("span");
-        groupTitle.className = "group-title";
-        groupTitle.textContent = group.title || "Unnamed Group";
-        header.appendChild(groupTitle);
-
-        fragment.appendChild(header); // Append header to fragment
-
-        // Create and append tabs within the group
-        groupTabs.forEach((tab) => {
-          fragment.appendChild(
-            createTabItemElement(tab, true, group.color) // Create element and append to fragment
-          );
-        });
+          // Append tabs within the group
+          groupTabs.forEach((tab) => {
+            fragment.appendChild(createTabItemElement(tab, true, group.color));
+          });
+        }
       });
 
-      // Render ungrouped tabs to the fragment
+      // Render ungrouped tabs (already filtered)
       if (ungroupedTabs.length > 0) {
         ungroupedTabs.forEach((tab) => {
-          fragment.appendChild(createTabItemElement(tab, false, null)); // Create element and append to fragment
+          fragment.appendChild(createTabItemElement(tab, false, null));
         });
       }
     }
 
-    // Clear the existing list content *once*
-    tabListElement.innerHTML = "";
-    // Append the entire fragment to the DOM *once*
-    tabListElement.appendChild(fragment);
-    // *** End DocumentFragment usage ***
+    tabListElement.innerHTML = ""; // Clear existing list
+    tabListElement.appendChild(fragment); // Append filtered content
 
-    updateSelectAllCheckboxState(); // Update counts/parents after rendering
+    updateSelectAllCheckboxState(); // Update counts/parents based on visible items
   } catch (error) {
-    console.error("Error loading tabs/groups:", error);
-    tabListElement.innerHTML = "<p>Error loading tabs.</p>"; // Display error
+    console.error("Error loading/filtering tabs:", error);
+    tabListElement.innerHTML = "<p>Error loading tabs.</p>";
     selectAllCheckbox.checked = false;
     selectAllCheckbox.disabled = true;
     selectedCountSpan.textContent = "(0)";
@@ -445,10 +470,12 @@ export async function renderTabs() {
       console.error("Chrome runtime error:", chrome.runtime.lastError.message);
     }
   }
-  // console.timeEnd("renderTabs"); // End performance timer
 }
 
-// --- Exported functions for external use ---
+// Create debounced version for search input
+const debouncedRenderTabs = debounce(renderTabs, 250);
+
+// --- Exported functions ---
 // getSelectedTabIds, getSelectedTabData, clearSelectedTabs, removeCheckedTabId remain the same
 export function getSelectedTabIds() {
   return new Set(checkedTabIds);
@@ -456,16 +483,18 @@ export function getSelectedTabIds() {
 
 export function getSelectedTabData() {
   const selectedData = [];
+  // Query only visible checkboxes if needed, but usually better to get all selected
   const selectedCheckboxes = tabListElement.querySelectorAll(
     '.tab-item input[type="checkbox"]:checked'
   );
   selectedCheckboxes.forEach((checkbox) => {
     const tabId = parseInt(checkbox.dataset.tabId, 10);
-    if (!isNaN(tabId)) {
+    if (!isNaN(tabId) && checkedTabIds.has(tabId)) {
+      // Double check against state
       selectedData.push({
         id: tabId,
-        url: checkbox.dataset.tabUrl, // Original URL from dataset
-        title: checkbox.dataset.tabTitle, // Original Title from dataset
+        url: checkbox.dataset.tabUrl,
+        title: checkbox.dataset.tabTitle,
       });
     }
   });
@@ -496,5 +525,8 @@ export function setupTabsUI() {
     "click",
     handleCloseSelectedTabsClick
   );
-  // Initial render is called from sidebar.js (debounced)
+  // NEW: Add listener for search input
+  tabSearchInput.addEventListener("input", debouncedRenderTabs);
+
+  // Initial render is called from sidebar.js
 }

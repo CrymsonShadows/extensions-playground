@@ -64,6 +64,17 @@
   background-color: #fbeae9; /* Light red background on hover */
 }
 
+/* NEW: Search Input Container */
+.tab-search-container {
+  margin-bottom: 8px; /* Space below search */
+  flex-shrink: 0; /* Prevent shrinking */
+}
+.tab-search-input {
+  /* Inherits .input-field styles */
+  margin-bottom: 0; /* Remove default bottom margin */
+  width: 100%; /* Make it full width */
+}
+
 /* Status message specific to tab list area */
 #tab-list-status-message {
   margin-top: 5px;
@@ -78,11 +89,11 @@
   padding: 0;
   margin: 0;
   overflow-y: auto; /* Enable vertical scrolling */
-  flex-grow: 1; /* Allow list to fill available space in .main-tab-list-area */
-  /* border: 1px solid #eee; */ /* Border handled by parent */
+  flex-grow: 1; /* Allow list to fill available space */
   background-color: #fff; /* Keep white background */
   border-radius: 4px;
   min-height: 0; /* Add for flex stability */
+  border: 1px solid #eee; /* Add border back */
 }
 
 /* Styling for Tab Group Headers */
