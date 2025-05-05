@@ -1,13 +1,13 @@
-/* action_tabs.css - Styles for the main action tab switcher */
+/* action_tabs.css - Styles for the action tab switcher WITHIN settings */
 
+/* Container is now inside .settings-section */
 .action-tabs-container {
-  background-color: #e9edf0;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  flex-shrink: 0; /* Prevent shrinking */
-  border: 1px solid #ddd;
-  overflow: hidden; /* Contains content */
-  /* Make it a flex container */
+  /* background-color: #e9edf0; */ /* Handled by settings-section */
+  /* border-radius: 4px; */ /* Handled by settings-section */
+  /* margin-bottom: 10px; */ /* Removed */
+  /* flex-shrink: 0; */ /* Handled by settings-section */
+  /* border: 1px solid #ddd; */ /* Removed */
+  /* overflow: hidden; */ /* Handled by settings-section */
   display: flex;
   flex-direction: column;
 }
@@ -15,7 +15,9 @@
 .tab-buttons {
   display: flex;
   background-color: #dde3e8;
-  flex-shrink: 0; /* Prevent buttons area from shrinking */
+  flex-shrink: 0;
+  /* position: relative; */ /* Removed, toggle is in header now */
+  border-bottom: 1px solid #ddd;
 }
 
 .tab-btn {
@@ -27,8 +29,10 @@
   text-align: center;
   font-weight: bold;
   color: #555;
-  border-bottom: 3px solid transparent;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .tab-btn:hover {
@@ -37,40 +41,56 @@
 
 .tab-btn.active {
   color: #1a73e8;
-  border-bottom-color: #1a73e8;
   background-color: #e9edf0; /* Match panel background */
+  box-shadow: inset 0px 2px 0px 0px #1a73e8;
+}
+
+/* Toggle Indicator Styles - Moved to settings-header in base.css */
+#settings-toggle-indicator {
+  /* Now styled in base.css within .settings-header */
+  position: absolute; /* Keep absolute positioning relative to header */
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 8px;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  color: #555;
+  border-radius: 4px;
+  transition: transform 0.3s ease-out, background-color 0.2s ease;
+  z-index: 2;
+}
+#settings-toggle-indicator:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #111;
 }
 
 .tab-content {
   padding: 10px;
-  /* Make tab content area flexible */
   display: flex;
   flex-direction: column;
-  flex-grow: 1; /* Allow content to fill space */
-  overflow: hidden; /* Prevent content overflow */
+  flex-grow: 1;
+  overflow: auto; /* Allow content scrolling if needed */
 }
 
 .tab-panel {
-  display: none; /* Hidden by default */
-  border-top: 1px solid #ddd;
-  padding-top: 10px;
-  margin-top: -1px; /* Overlap border */
+  display: none;
+  padding-top: 0;
 }
 
 .tab-panel.active {
-  /* display: block; */ /* OLD */
-  /* Make active panel flexible */
-  display: flex; /* NEW */
-  flex-direction: column; /* NEW */
-  flex-grow: 1; /* NEW - Allow panel to fill tab-content */
-  overflow: hidden; /* NEW - Prevent panel overflow */
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  overflow: hidden; /* Let internal elements scroll */
 }
 
 /* Panel-specific headings */
 .tab-panel h3 {
   margin-top: 0;
   border-bottom: 1px solid #ddd;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 
 /* Panel-specific labels */
@@ -80,5 +100,17 @@
   margin-bottom: 3px;
   color: #555;
   font-weight: bold;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
+
+/* Collapsed State - Targets .settings-section now */
+.settings-section.collapsed .action-tabs-container {
+  /* Target content */
+  display: none;
+}
+
+.settings-section.collapsed #settings-toggle-indicator {
+  transform: translateY(-50%) rotate(180deg); /* Point arrow down */
+}
+
+/* No need for active tab style changes when collapsed, header is always visible */

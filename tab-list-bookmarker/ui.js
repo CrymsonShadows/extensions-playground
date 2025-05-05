@@ -1,80 +1,213 @@
 // ui.js
 
 // --- Element References ---
-const tabButtons = document.querySelectorAll(".tab-btn");
-const tabPanels = document.querySelectorAll(".tab-panel");
-const mainTabListArea = document.querySelector(".main-tab-list-area"); // Wrapper for current tabs
-const stashListArea = document.getElementById("stash-list-area"); // Get the new stash list wrapper
+// Settings Elements
+const settingsSection = document.getElementById("settings-section");
+const settingsHeader = document.querySelector(".settings-header");
+const settingsToggleIndicator = document.getElementById(
+  "settings-toggle-indicator"
+);
+const actionTabsContainer = document.querySelector(".action-tabs-container");
+const actionTabButtons = document.querySelectorAll(".tab-btn"); // Settings tabs
+const actionTabPanels = document.querySelectorAll(".tab-panel"); // Settings panels
 
-// --- Action Tab Switching Logic ---
-function handleTabClick(event) {
+// List Elements
+const listTabButtons = document.querySelectorAll(".list-tab-btn"); // List tabs
+const listPanels = document.querySelectorAll(".list-panel"); // List panels (wrappers)
+// We don't need direct references to mainTabListArea/stashListArea here anymore
+
+// --- Constants ---
+const SETTINGS_COLLAPSED_KEY = "settingsCollapsed";
+const ACTIVE_LIST_TAB_KEY = "activeListTab";
+
+// --- Settings Collapse/Expand Logic ---
+// toggleSettings, loadSettingsCollapsedState remain the same
+async function toggleSettings(event) {
+  if (!settingsSection) return;
+  const isCollapsed = settingsSection.classList.toggle("collapsed");
+  console.log("Toggled settings collapsed state:", isCollapsed);
+  try {
+    await chrome.storage.local.set({ [SETTINGS_COLLAPSED_KEY]: isCollapsed });
+    console.log("Saved collapsed state:", isCollapsed);
+  } catch (error) {
+    console.error("Error saving settings collapsed state:", error);
+  }
+}
+
+async function loadSettingsCollapsedState() {
+  if (!settingsSection) return;
+  try {
+    const result = await chrome.storage.local.get(SETTINGS_COLLAPSED_KEY);
+    const isCollapsed = !!result[SETTINGS_COLLAPSED_KEY];
+    settingsSection.classList.toggle("collapsed", isCollapsed);
+    console.log("Loaded settings collapsed state:", isCollapsed);
+  } catch (error) {
+    console.error("Error loading settings collapsed state:", error);
+    settingsSection.classList.remove("collapsed");
+  }
+}
+
+// --- Settings Tab Switching Logic ---
+// *** SIMPLIFIED: Only switches settings panels ***
+function handleActionTabClick(event) {
   const clickedButton = event.currentTarget;
   const targetPanelId = clickedButton.dataset.target;
 
-  // Remove active class from all buttons and panels
-  tabButtons.forEach((btn) => btn.classList.remove("active"));
-  tabPanels.forEach((panel) => panel.classList.remove("active"));
+  // Remove active class from all action buttons and panels
+  actionTabButtons.forEach((btn) => btn.classList.remove("active"));
+  actionTabPanels.forEach((panel) => panel.classList.remove("active"));
 
   // Add active class to the clicked button and corresponding panel
   clickedButton.classList.add("active");
   const targetPanel = document.getElementById(targetPanelId);
-  if (targetPanel) {
+  if (targetPanel && targetPanel.classList.contains("tab-panel")) {
+    // Check it's a settings panel
     targetPanel.classList.add("active");
+    console.log(`Switched to settings panel: ${targetPanelId}`);
   } else {
-    console.error("Target panel not found:", targetPanelId);
-  }
-
-  // Determine if the stash tab is the target
-  const isStashTabActive = targetPanelId === "stash-settings";
-
-  // Show/Hide STASH list AREA
-  if (stashListArea) {
-    // Check if the stash wrapper exists
-    if (isStashTabActive) {
-      stashListArea.classList.remove("hidden");
-    } else {
-      stashListArea.classList.add("hidden");
+    console.error("Target settings panel not found or invalid:", targetPanelId);
+    // Fallback: activate the first settings panel if target is invalid
+    if (actionTabButtons.length > 0 && actionTabPanels.length > 0) {
+      actionTabButtons[0].classList.add("active");
+      actionTabPanels[0].classList.add("active");
     }
-  } else {
-    console.error("Could not find #stash-list-area element to hide/show.");
   }
+  // ** REMOVED logic that hid/showed list areas **
+}
 
-  // Show/Hide MAIN tab list AREA
-  if (mainTabListArea) {
-    // Check if the main tab list wrapper exists
-    if (isStashTabActive) {
-      // Hide the main tab list area if Stash tab is active
-      mainTabListArea.classList.add("hidden");
-    } else {
-      // Show the main tab list area for other action tabs
-      mainTabListArea.classList.remove("hidden");
-    }
+// --- List Tab Switching Logic ---
+// handleListTabClick, loadActiveListTab remain the same
+function handleListTabClick(event) {
+  const clickedButton = event.currentTarget;
+  const targetPanelId = clickedButton.dataset.target;
+
+  listTabButtons.forEach((btn) => btn.classList.remove("active"));
+  listPanels.forEach((panel) => panel.classList.remove("active"));
+
+  clickedButton.classList.add("active");
+  const targetPanel = document.getElementById(targetPanelId);
+  if (targetPanel && targetPanel.classList.contains("list-panel")) {
+    targetPanel.classList.add("active");
+    console.log(`Switched to list panel: ${targetPanelId}`);
+    chrome.storage.local
+      .set({ [ACTIVE_LIST_TAB_KEY]: targetPanelId })
+      .catch((err) => {
+        console.error("Error saving active list tab:", err);
+      });
   } else {
-    console.error("Could not find .main-tab-list-area element to hide/show.");
+    console.error("Target list panel not found or invalid:", targetPanelId);
+    if (listTabButtons.length > 0 && listPanels.length > 0) {
+      listTabButtons[0].classList.add("active");
+      listPanels[0].classList.add("active");
+      chrome.storage.local
+        .set({ [ACTIVE_LIST_TAB_KEY]: listPanels[0].id })
+        .catch((err) => {});
+    }
   }
 }
 
+async function loadActiveListTab() {
+  try {
+    const result = await chrome.storage.local.get(ACTIVE_LIST_TAB_KEY);
+    const activeTabId =
+      result[ACTIVE_LIST_TAB_KEY] ||
+      (listPanels.length > 0 ? listPanels[0].id : null);
+
+    if (activeTabId) {
+      let foundActive = false;
+      listTabButtons.forEach((btn) => {
+        const isActive = btn.dataset.target === activeTabId;
+        btn.classList.toggle("active", isActive);
+        if (isActive) foundActive = true;
+      });
+      listPanels.forEach((panel) => {
+        panel.classList.toggle("active", panel.id === activeTabId);
+      });
+
+      if (!foundActive && listTabButtons.length > 0 && listPanels.length > 0) {
+        listTabButtons[0].classList.add("active");
+        listPanels[0].classList.add("active");
+      }
+      console.log("Loaded active list tab:", activeTabId);
+    } else {
+      console.log("No active list tab saved, defaulting to first.");
+      if (listTabButtons.length > 0 && listPanels.length > 0) {
+        listTabButtons[0].classList.add("active");
+        listPanels[0].classList.add("active");
+      }
+    }
+  } catch (error) {
+    console.error("Error loading active list tab state:", error);
+    if (listTabButtons.length > 0 && listPanels.length > 0) {
+      listTabButtons[0].classList.add("active");
+      listPanels[0].classList.add("active");
+    }
+  }
+}
+
+// --- Setup ---
+// setupActionTabs and setupListTabs remain largely the same,
+// just ensure they target the correct elements.
 export function setupActionTabs() {
-  tabButtons.forEach((button) => {
-    button.addEventListener("click", handleTabClick);
+  actionTabButtons.forEach((button) => {
+    if (button.dataset.tabListenerAttached !== "true") {
+      button.addEventListener("click", handleActionTabClick);
+      button.dataset.tabListenerAttached = "true";
+    }
   });
 
-  // Ensure the first tab is active on load and set initial visibility
   if (
-    tabButtons.length > 0 &&
-    tabPanels.length > 0 &&
-    stashListArea &&
-    mainTabListArea
+    settingsHeader &&
+    settingsHeader.dataset.toggleListenerAttached !== "true"
   ) {
-    // Manually trigger the click handler for the first button
-    // to ensure the correct initial state (hiding/showing both areas)
-    handleTabClick({ currentTarget: tabButtons[0] });
+    settingsHeader.addEventListener("click", toggleSettings);
+    settingsHeader.dataset.toggleListenerAttached = "true";
+    console.log("Attaching settings toggle listener to header.");
+    loadSettingsCollapsedState();
+  } else if (!settingsHeader) {
+    console.error("Could not find settings header element.");
   }
+
+  // Set initial active SETTINGS tab (if not collapsed)
+  if (!settingsSection || !settingsSection.classList.contains("collapsed")) {
+    const firstActionTabButton =
+      actionTabButtons.length > 0 ? actionTabButtons[0] : null;
+    if (firstActionTabButton && actionTabPanels.length > 0) {
+      let activeActionBtn =
+        document.querySelector(".tab-btn.active") || firstActionTabButton;
+      const targetActionPanelId = activeActionBtn.dataset.target;
+      const targetActionPanel = document.getElementById(targetActionPanelId);
+      if (
+        !targetActionPanel ||
+        !targetActionPanel.classList.contains("tab-panel")
+      ) {
+        // Verify it's a settings panel
+        activeActionBtn.classList.remove("active");
+        activeActionBtn = firstActionTabButton;
+        activeActionBtn.classList.add("active");
+      }
+      actionTabPanels.forEach((panel) => panel.classList.remove("active"));
+      const activePanel = document.getElementById(
+        activeActionBtn.dataset.target
+      );
+      if (activePanel) activePanel.classList.add("active");
+    }
+  }
+}
+
+export function setupListTabs() {
+  listTabButtons.forEach((button) => {
+    if (button.dataset.listTabListener !== "true") {
+      button.addEventListener("click", handleListTabClick);
+      button.dataset.listTabListener = "true";
+    }
+  });
+  loadActiveListTab();
 }
 
 // --- Fetch Title Logic --- (No changes needed here)
+// waitForTabLoadComplete, handleFetchTitleClick remain the same
 function waitForTabLoadComplete(tabId, targetUrl) {
-  // ... (implementation remains the same)
   return new Promise((resolve, reject) => {
     const listener = (updatedTabId, changeInfo, tab) => {
       if (updatedTabId === tabId) {

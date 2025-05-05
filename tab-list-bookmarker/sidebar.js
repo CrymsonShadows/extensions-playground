@@ -1,6 +1,7 @@
 // sidebar.js - Main Entry Point
 
-import { setupActionTabs } from "./ui.js";
+// Import setup functions for different UI sections
+import { setupActionTabs, setupListTabs } from "./ui.js"; // Updated ui.js exports
 import {
   renderTabs,
   setupTabsUI,
@@ -8,11 +9,10 @@ import {
 } from "./tabs_ui.js";
 import { renderBookmarkTree, setupBookmarksUI } from "./bookmarks_ui.js";
 import { setupGroupingUI, loadExistingGroups } from "./grouping_ui.js";
-// Import specific functions from stash_ui
 import {
   setupStashUI,
   renderStashList,
-  updateHighlightingOnActiveTab, // Import the specific function
+  updateHighlightingOnActiveTab,
 } from "./stash_ui.js";
 import { debounce } from "./utils.js";
 
@@ -23,40 +23,42 @@ const debouncedRenderStashList = debounce(renderStashList, 300);
 const debouncedLoadExistingGroups = debounce(loadExistingGroups, 300);
 
 // --- State ---
-let initialSetupComplete = false; // Renamed for clarity
+let initialSetupComplete = false;
 
 // --- Core Setup and Render Logic ---
 
-// Function to perform the initial setup of UI elements (listeners, etc.)
-// This should only run once
 async function performInitialSetup() {
-  // Prevent running multiple times
   if (initialSetupComplete) return;
   console.log("Performing initial UI setup...");
   try {
-    setupActionTabs();
-    setupTabsUI();
-    setupBookmarksUI();
-    setupGroupingUI(); // This calls loadExistingGroups internally
-    await setupStashUI(); // Sets up listeners and loads highlight state
-    initialSetupComplete = true; // Set flag only after successful setup
+    // Setup UI sections (listeners, initial states)
+    setupActionTabs(); // Sets up settings tabs and collapse listener
+    setupListTabs(); // Sets up list tabs listener and loads active list tab
+    setupTabsUI(); // Sets up current tabs list listeners (select all etc.)
+    setupBookmarksUI(); // Sets up bookmark panel listeners
+    setupGroupingUI(); // Sets up group panel listeners (calls loadExistingGroups)
+    await setupStashUI(); // Sets up stash listeners and loads highlight state
+
+    initialSetupComplete = true;
     console.log("Initial UI setup complete.");
   } catch (error) {
     console.error("Error during initial UI setup:", error);
-    // Handle setup error appropriately, maybe show an error message
   }
 }
 
-// Function to render all dynamic content
-// Can be called multiple times (e.g., on visibility change)
 async function renderAllLists() {
+  // Only render if setup is complete
+  if (!initialSetupComplete) {
+    console.warn(
+      "Attempted to render lists before initial setup was complete."
+    );
+    return;
+  }
   console.log("Rendering all lists...");
-  // Use Promise.allSettled to run renders concurrently
   const results = await Promise.allSettled([
     renderTabs(),
     renderBookmarkTree(),
     renderStashList(),
-    // loadExistingGroups is part of setupGroupingUI
   ]);
   console.log("List rendering finished.");
   results.forEach((result, index) => {
@@ -66,63 +68,46 @@ async function renderAllLists() {
     }
   });
 
-  // Update highlighting *after* lists (especially stash list) are rendered
-  if (initialSetupComplete) {
-    // Ensure setup (and highlight state load) happened
-    try {
-      await updateHighlightingOnActiveTab();
-      console.log("Highlighting updated after list render.");
-    } catch (highlightError) {
-      console.error(
-        "Error updating highlighting after render:",
-        highlightError
-      );
-    }
+  try {
+    await updateHighlightingOnActiveTab();
+    console.log("Highlighting updated after list render.");
+  } catch (highlightError) {
+    console.error("Error updating highlighting after render:", highlightError);
   }
 }
 
 // --- Initial Load Trigger ---
-// Attempt setup and render as soon as the script runs
-// This might happen before or after DOMContentLoaded
 performInitialSetup().then(() => {
-  // Once setup is done (or attempted), render lists
   if (initialSetupComplete && document.readyState !== "loading") {
-    // If setup finished and DOM is ready, render immediately
     renderAllLists();
   } else if (initialSetupComplete) {
-    // If setup finished but DOM isn't ready, wait for DOMContentLoaded
     document.addEventListener("DOMContentLoaded", renderAllLists, {
       once: true,
     });
   }
-  // If setup failed, render won't happen here
 });
 
-// Fallback/Redundancy: Ensure setup/render happens on DOMContentLoaded if not already done
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("Sidebar DOM loaded event fired.");
   if (!initialSetupComplete) {
     console.log(
       "Initial setup not complete, running setup and render via DOMContentLoaded."
     );
-    await performInitialSetup(); // Attempt setup again if it failed earlier
+    await performInitialSetup();
     if (initialSetupComplete) {
-      await renderAllLists(); // Perform initial render if setup succeeded
+      await renderAllLists();
     }
   } else {
-    console.log("DOM loaded, but initial setup was already complete.");
-    // Optionally, re-render here too if needed, but visibilitychange should cover it
-    // await renderAllLists();
+    // If setup is done, ensure lists render if DOM was ready before setup finished
+    await renderAllLists();
   }
 });
 
 // --- Render on Visibility Change ---
-// This handles cases where the sidebar is re-opened after the initial load
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState === "visible") {
     console.log("Sidebar became visible.");
     if (!initialSetupComplete) {
-      // Should ideally not happen if the above logic works, but as a safeguard:
       console.warn(
         "Sidebar visible but initial setup not complete. Attempting setup and render."
       );
@@ -131,7 +116,6 @@ document.addEventListener("visibilitychange", async () => {
         await renderAllLists();
       }
     } else {
-      // If initial setup is done, just re-render the lists
       console.log("Re-rendering lists on visibility change.");
       await renderAllLists();
     }
@@ -155,10 +139,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  // Update highlighting when active tab changes
   if (initialSetupComplete) {
     try {
-      await updateHighlightingOnActiveTab(); // Call specific function
+      await updateHighlightingOnActiveTab();
     } catch (highlightError) {
       console.error(
         "Error updating highlighting on tab activation:",
@@ -190,26 +173,21 @@ chrome.bookmarks.onMoved.addListener(debouncedRenderBookmarkTree);
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "stashUpdated") {
     console.log("Sidebar: Received stashUpdated message from background.");
-    const stashPanel = document.getElementById("stash-settings");
-    const stashListArea = document.getElementById("stash-list-area");
-
-    // Re-render stash list if the stash tab is active or its list area is visible
-    if (
-      (stashPanel && stashPanel.classList.contains("active")) ||
-      (stashListArea && !stashListArea.classList.contains("hidden"))
-    ) {
+    // Find the active list tab button
+    const activeListTab = document.querySelector(".list-tab-btn.active");
+    // Re-render stash list only if "Stashed Items" tab is active
+    if (activeListTab && activeListTab.dataset.target === "stash-list-area") {
       console.log(
-        "Sidebar: Stash area visible, calling debouncedRenderStashList."
+        "Sidebar: Stash list tab active, calling debouncedRenderStashList."
       );
       debouncedRenderStashList();
     } else {
       console.log(
-        "Sidebar: Stash area not active, list will refresh when opened."
+        "Sidebar: Stash list tab not active, list will refresh when selected."
       );
     }
     return true; // Indicate potential async response
   }
-  // Return false or undefined if the message is not handled asynchronously
 });
 
 console.log("Sidebar script loaded (Modular).");

@@ -30,10 +30,17 @@ body {
 h2,
 h3 {
   color: #1a1a1a;
-  margin-top: 10px;
+  margin-top: 5px; /* Reduced top margin */
   margin-bottom: 8px;
   padding-bottom: 5px;
   flex-shrink: 0;
+}
+/* Added specific heading for stash controls */
+.stash-controls-section h4 {
+  margin-top: 5px;
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #333;
 }
 
 /* Common Button Styles */
@@ -151,35 +158,155 @@ hr.section-divider {
   }
 }
 
-/* Wrapper for the main tab list area */
-.main-tab-list-area {
-  display: flex;
-  flex-direction: column;
-  flex-grow: 1; /* Allow this area to grow */
-  overflow: hidden; /* Contain scrolling within #tab-list */
-  margin-top: 10px;
-  min-height: 50px; /* Give it some minimum height */
-}
+/* --- NEW Layout Sections --- */
 
-/* Ensure Action Tabs container doesn't shrink */
-.action-tabs-container {
+/* Settings Section */
+.settings-section {
   flex-shrink: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  background-color: #e9edf0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+.settings-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background-color: #dde3e8;
+  border-bottom: 1px solid #ccc;
+  cursor: pointer;
+  position: relative; /* Added for indicator positioning */
+}
+.settings-header h3 {
+  margin: 0;
+  font-size: 1em;
+  font-weight: bold;
 }
 
-/* NEW: Wrapper for the stash list area */
-.stash-list-area {
-  display: flex; /* Use flexbox */
-  flex-direction: column; /* Stack children vertically */
-  flex-grow: 1; /* Allow this area to grow */
-  overflow: hidden; /* Contain scrolling within #stash-list */
-  margin-top: 10px; /* Add space above */
-  border-top: 1px solid #ccc; /* Add a separator */
-  padding-top: 5px; /* Add padding above controls */
-  min-height: 50px; /* Give it some minimum height */
+/* List Section */
+.list-section {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f9fa;
 }
-/* Hide stash area by default (JS toggles .hidden) */
-.stash-list-area.hidden {
+.list-tab-buttons {
+  display: flex;
+  background-color: #e9ecef;
+  flex-shrink: 0;
+  border-bottom: 1px solid #ccc;
+}
+.list-tab-btn {
+  flex-grow: 1;
+  padding: 10px 5px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  text-align: center;
+  font-weight: bold;
+  color: #495057;
+  border-bottom: 3px solid transparent;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease;
+}
+.list-tab-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.list-tab-btn.active {
+  color: #0d6efd;
+  border-bottom-color: #0d6efd;
+  background-color: #f8f9fa;
+}
+
+/* List Panels (Containers for main-tab-list-area and stash-list-area) */
+.list-panel {
+  display: none; /* Hide inactive panels by default */
+  flex-grow: 1; /* Allow panel to take space */
+  overflow: hidden; /* Hide overflow */
+  /* flex-direction is set by .active */
+}
+.list-panel.active {
+  display: flex; /* Show active panel */
+  flex-direction: column; /* Arrange children vertically */
+}
+
+/* Styling for the specific list areas INSIDE the panels */
+.main-tab-list-area,
+.stash-list-area {
+  /* These ARE the .list-panel elements, so styles moved there or below */
+  /* Remove redundant/conflicting styles */
+  /* display: flex; */ /* REMOVED - Handled by .list-panel.active */
+  /* flex-direction: column; */ /* REMOVED - Handled by .list-panel.active */
+  /* flex-grow: 1; */ /* REMOVED - Handled by .list-panel */
+  /* overflow: hidden; */ /* REMOVED - Handled by .list-panel */
+  border: none;
+  margin-top: 0;
+  padding-top: 0;
+  min-height: 0; /* Keep for flex growth */
+  padding: 10px; /* Keep padding */
+}
+
+/* Ensure the actual lists inside the panels can scroll */
+#tab-list,
+#stash-list {
+  flex-grow: 1;
+  overflow-y: auto;
+  min-height: 0; /* Crucial for flex scrolling */
+}
+
+/* Stash controls section styling (within settings panel) */
+.stash-controls-section {
+  padding: 0;
+  margin-top: 10px; /* Add some space above controls */
+}
+.stash-controls-section h4 {
+  margin-top: 0; /* Remove extra top margin */
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #333;
+  padding-left: 0; /* Align with inputs */
+}
+
+/* Remove border from action-tabs-container */
+.action-tabs-container {
+  border: none;
+  margin-bottom: 0;
+  border-radius: 0;
+}
+
+/* Adjustments for collapsed state */
+.settings-section.collapsed .action-tabs-container {
   display: none;
+}
+.settings-section.collapsed .settings-header {
+  border-bottom: none;
+}
+
+/* Toggle Indicator positioning */
+#settings-toggle-indicator {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 5px 8px;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  color: #555;
+  border-radius: 4px;
+  transition: transform 0.3s ease-out, background-color 0.2s ease;
+  z-index: 2;
+}
+#settings-toggle-indicator:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #111;
+}
+.settings-section.collapsed #settings-toggle-indicator {
+  transform: translateY(-50%) rotate(180deg); /* Point arrow down */
 }

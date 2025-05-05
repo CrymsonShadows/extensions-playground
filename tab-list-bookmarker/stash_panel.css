@@ -1,12 +1,12 @@
-/* stash_panel.css - Styles for the Stash action panel */
+/* stash_panel.css - Styles for the Stash action panel and list area */
 
-/* Button group for stash actions (within the tab panel) */
+/* Button group for stash actions (within the settings tab panel) */
 .stash-actions {
   margin-bottom: 10px;
   flex-shrink: 0;
 }
 
-/* Specific button styles (within the tab panel) */
+/* Specific button styles (within the settings tab panel) */
 .btn.stash-btn {
   background-color: #7a6ff0; /* Purple */
   color: white;
@@ -27,7 +27,7 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Styles for controls and list moved to the new #stash-list-area */
+/* Styles for controls and list now apply within #stash-list-area */
 
 /* Container for filter/search/sort controls (within #stash-list-area) */
 .stash-controls {
@@ -83,13 +83,12 @@
 
 /* Container for the list of stashed items (within #stash-list-area) */
 #stash-list {
-  /* Target the ID specifically */
-  overflow-y: auto; /* Keep scrolling */
-  border: 1px solid #ccc;
+  overflow-y: auto;
+  /* border: 1px solid #ccc; */ /* Border handled by parent */
   border-radius: 4px;
-  background-color: #fff;
-  flex-grow: 1; /* Make list grow and fill #stash-list-area */
-  min-height: 0; /* Important for flexbox sizing */
+  background-color: #fff; /* Keep white background */
+  flex-grow: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -97,119 +96,115 @@
 /* Individual stashed item */
 .stash-item {
   display: flex;
-  /* align-items: center; */ /* Changed to flex-start for better wrapping alignment */
-  align-items: flex-start; /* Align items to the top when title wraps */
-  padding: 12px 15px; /* Increased padding */
+  align-items: flex-start;
+  padding: 12px 15px;
   border-bottom: 1px solid #eee;
-  gap: 10px; /* Increased gap */
-  flex-shrink: 0; /* Prevent items from shrinking */
+  gap: 10px;
+  flex-shrink: 0;
 }
 .stash-item:last-child {
   border-bottom: none;
 }
 
-/* Status indicator (Read/Unread) */
+/* Status indicator */
 .stash-item-status {
   flex-shrink: 0;
-  font-size: 0.85em; /* Slightly larger status */
-  padding: 3px 6px; /* Increased padding */
+  font-size: 0.85em;
+  padding: 3px 6px;
   border-radius: 3px;
   white-space: nowrap;
-  margin-top: 2px; /* Add slight top margin to align better with wrapped text */
+  margin-top: 2px;
 }
 .stash-item-status.consumed {
-  background-color: #e6f4ea; /* Light green */
-  color: #137333; /* Dark green */
+  background-color: #e6f4ea;
+  color: #137333;
 }
 .stash-item-status.unread {
-  background-color: #e8f0fe; /* Light blue */
-  color: #1967d2; /* Dark blue */
+  background-color: #e8f0fe;
+  color: #1967d2;
 }
 
-/* Apply line-through to title when consumed */
+/* Consumed title style */
 .stash-item-status.consumed + .stash-item-info .stash-item-title {
   text-decoration: line-through;
   opacity: 0.7;
 }
 .stash-item-status.consumed + .stash-item-info .stash-item-title:hover {
-  text-decoration: line-through underline; /* Keep underline on hover */
+  text-decoration: line-through underline;
 }
 
-/* Container for title and URL */
+/* Info container */
 .stash-item-info {
   flex-grow: 1;
-  overflow: hidden; /* Keep this to prevent info container itself from overflowing */
+  overflow: hidden;
 }
 
-/* Stashed item title (as a link) */
+/* Title */
 .stash-item-title {
   display: block;
   font-weight: bold;
-  /* white-space: nowrap; */ /* REMOVED to allow wrapping */
   white-space: normal; /* Allow wrapping */
-  /* overflow: hidden; */ /* REMOVED */
-  /* text-overflow: ellipsis; */ /* REMOVED */
-  font-size: 1em; /* Increased title font size */
-  margin-bottom: 4px; /* Increased margin */
+  font-size: 1em;
+  margin-bottom: 4px;
   color: #333;
   text-decoration: none;
-  word-break: break-word; /* Help break long words if needed */
+  word-break: break-word;
 }
 .stash-item-title:hover {
   text-decoration: underline;
-  color: #1a73e8; /* Blue on hover */
+  color: #1a73e8;
 }
 
-/* Stashed item URL (hostname) */
+/* URL */
 .stash-item-url {
   display: block;
-  font-size: 0.9em; /* Increased URL font size */
+  font-size: 0.9em;
   color: #666;
-  white-space: nowrap; /* Keep URL on one line */
-  overflow: hidden; /* Keep URL overflow hidden */
-  text-overflow: ellipsis; /* Keep URL ellipsis */
-}
-
-/* Stash count indicator */
-.stash-item-count {
-  font-size: 0.9em; /* Increased count size */
-  font-weight: bold; /* Make count bold */
-  color: #555; /* Slightly darker color */
-  background-color: #e0e0e0; /* Slightly different background */
-  padding: 3px 7px; /* Increased padding */
-  border-radius: 4px; /* Slightly larger radius */
-  flex-shrink: 0;
-  margin-left: 6px; /* Increased margin */
-  margin-right: auto; /* Push remove button to the right */
   white-space: nowrap;
-  margin-top: 1px; /* Align better with title */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Date stashed - Hide this element */
+/* Count indicator */
+.stash-item-count {
+  font-size: 0.9em;
+  font-weight: bold;
+  color: #555;
+  background-color: #e0e0e0;
+  padding: 3px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-left: 6px;
+  margin-right: auto;
+  white-space: nowrap;
+  margin-top: 1px;
+}
+
+/* Date (Hidden) */
 .stash-item-date {
-  display: none; /* Hide the date */
+  display: none;
 }
 
-/* Remove button for stashed items */
+/* Remove button */
 .stash-item-remove-btn {
   background: none;
   border: none;
-  color: #dc3545; /* Red color for delete */
-  font-size: 1.5em; /* Slightly larger remove button */
+  color: #dc3545;
+  font-size: 1.5em;
   font-weight: bold;
   cursor: pointer;
-  padding: 0 8px; /* Increased padding */
-  margin-left: 8px; /* Increased space from count/info */
+  padding: 0 8px;
+  margin-left: 8px;
   line-height: 1;
   opacity: 0.6;
   transition: opacity 0.2s ease, color 0.2s ease;
-  order: 5; /* Ensure it appears last in flex layout */
-  align-self: center; /* Vertically center the button itself */
+  order: 5;
+  align-self: center;
   flex-shrink: 0;
 }
 .stash-item-remove-btn:hover {
   opacity: 1;
-  color: #a71d2a; /* Darker red on hover */
+  color: #a71d2a;
 }
 .stash-item-remove-btn:disabled {
   color: #ccc;

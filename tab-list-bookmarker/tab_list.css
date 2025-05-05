@@ -10,12 +10,14 @@
   flex-shrink: 0; /* Prevent header from shrinking */
 }
 .tabs-header h2 {
-  margin-bottom: 0;
+  margin: 0; /* Removed margin */
+  padding: 0; /* Removed padding */
   border-bottom: none;
   display: flex;
   align-items: baseline;
   gap: 6px;
   flex-grow: 1; /* Allow title to take space */
+  font-size: 1em; /* Slightly smaller */
 }
 .selected-count-display {
   font-size: 0.8em;
@@ -64,21 +66,21 @@
 
 /* Status message specific to tab list area */
 #tab-list-status-message {
-  margin-top: 5px; /* Less margin than panel status */
+  margin-top: 5px;
   margin-bottom: 5px;
-  padding: 0 5px; /* Add padding */
-  flex-shrink: 0; /* Prevent shrinking */
+  padding: 0 5px;
+  flex-shrink: 0;
 }
 
 /* The main list container */
 #tab-list {
   list-style: none;
   padding: 0;
-  margin: 0; /* Remove margin, handled by parent */
+  margin: 0;
   overflow-y: auto; /* Enable vertical scrolling */
   flex-grow: 1; /* Allow list to fill available space in .main-tab-list-area */
-  border: 1px solid #eee;
-  background-color: #fff;
+  /* border: 1px solid #eee; */ /* Border handled by parent */
+  background-color: #fff; /* Keep white background */
   border-radius: 4px;
   min-height: 0; /* Add for flex stability */
 }
@@ -89,11 +91,10 @@
   align-items: center;
   padding: 6px 5px;
   margin-top: 5px;
-  position: sticky; /* Keep headers visible when scrolling */
+  position: sticky;
   top: 0;
   z-index: 1;
-  flex-shrink: 0; /* Prevent shrinking */
-  /* Background and border set dynamically */
+  flex-shrink: 0;
 }
 .tab-group-header:first-child {
   margin-top: 0;
@@ -102,7 +103,7 @@
   margin-right: 8px;
   flex-shrink: 0;
   cursor: pointer;
-  accent-color: #5cb85c; /* Green accent */
+  accent-color: #5cb85c;
 }
 .group-color-indicator {
   width: 10px;
@@ -110,7 +111,7 @@
   border-radius: 50%;
   margin-right: 8px;
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.2); /* Subtle border */
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 .group-title {
   flex-grow: 1;
@@ -126,29 +127,21 @@
 .tab-item {
   display: flex;
   align-items: center;
-  padding: 8px 5px 8px 15px; /* Default padding */
+  padding: 8px 5px 8px 15px;
   margin-bottom: 1px;
   border-bottom: 1px solid #f0f0f0;
   transition: background-color 0.2s ease;
   color: #333;
-  flex-shrink: 0; /* Prevent shrinking */
+  flex-shrink: 0;
 }
 .tab-item:last-child {
   border-bottom: none;
 }
-/* Hover effect for ungrouped tabs */
 .tab-item:not([style*="background-color"]):hover {
   background-color: #e9e9e9;
 }
-/* Hover effect for grouped tabs (adds slight overlay) */
 .tab-item[style*="background-color"]:hover {
   background-image: linear-gradient(rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.05));
-}
-
-/* Adjustments for tabs within groups (dynamic styles applied in JS) */
-.tab-item.in-group {
-  /* border-left: 4px solid transparent; /* Set dynamically */
-  /* padding-left: 21px; /* Adjusted dynamically */
 }
 
 /* Tab item checkbox */
@@ -156,7 +149,7 @@
   margin-right: 8px;
   flex-shrink: 0;
   cursor: pointer;
-  accent-color: #5cb85c; /* Green accent */
+  accent-color: #5cb85c;
 }
 
 /* Tab favicon */
@@ -173,7 +166,7 @@
   display: flex;
   align-items: center;
   flex-grow: 1;
-  overflow: hidden; /* Prevent title overflow */
+  overflow: hidden;
   margin-right: 8px;
 }
 
@@ -183,7 +176,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.9em;
-  cursor: default; /* Indicate it's not directly clickable */
+  cursor: default;
 }
 
 /* Button to fetch title for suspended tabs */
@@ -199,9 +192,8 @@
   flex-shrink: 0;
 }
 .fetch-title-btn:hover {
-  color: #1a73e8; /* Blue on hover */
+  color: #1a73e8;
 }
-/* Inherits .loading animation from base.css */
 
 /* Individual tab close button */
 .close-tab-btn {
@@ -212,13 +204,13 @@
   font-weight: bold;
   cursor: pointer;
   padding: 0 5px;
-  margin-left: auto; /* Push to the right */
+  margin-left: auto;
   flex-shrink: 0;
   line-height: 1;
   opacity: 0.7;
   transition: opacity 0.2s ease, color 0.2s ease;
 }
 .close-tab-btn:hover {
-  color: #d9534f; /* Red on hover */
+  color: #d9534f;
   opacity: 1;
 }
