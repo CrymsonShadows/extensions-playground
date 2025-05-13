@@ -8,12 +8,15 @@ import {
   stashOrUpdateItemDB,
   getAllStashItemsDB,
   updateStashItemConsumedDB,
-  getAllStashUrlsDB, // Ensure this is exported from db.js
+  getAllStashUrlsDB,
   deleteStashItemDB,
+  updateStashItemFavoriteDB,
 } from "./db.js";
+import { getSelectedTabData, clearSelectedTabs } from "./tabs_ui.js";
 
 // --- Constants ---
 const HIGHLIGHT_STORAGE_KEY = "stashHighlightEnabled";
+const PROFILE_NAME_STORAGE_KEY = "stashProfileName";
 const ITEMS_PER_PAGE = 25;
 const SCROLL_THRESHOLD = 100;
 
@@ -28,15 +31,34 @@ const stashSortSelect = document.getElementById("stash-sort");
 const stashListElement = document.getElementById("stash-list");
 const stashFilterSelect = document.getElementById("stash-filter");
 const highlightToggleButton = document.getElementById("highlight-toggle-btn");
+const stashTagsInput = document.getElementById("stash-tags-input");
+const stashSelectedBtn = document.getElementById("stash-selected-btn");
+const stashCloseSelectedBtn = document.getElementById(
+  "stash-close-selected-btn"
+);
+const exportStashBtn = document.getElementById("export-stash-btn");
+const importStashBtn = document.getElementById("import-stash-btn");
+const importStashInput = document.getElementById("import-stash-input");
+const importExportStatusMessageElement = document.getElementById(
+  "import-export-status-message"
+);
+const profileNameInput = document.getElementById("profile-name-input");
 
 // --- State Variables ---
 let isHighlightingEnabled = false;
 let allStashedItems = [];
 let currentPage = 1;
 let isLoadingMore = false;
+let isStashingSelected = false;
+let isExporting = false;
+let isImporting = false;
+
+// --- Helper to set status message for import/export ---
+function setImportExportStatus(message, isError = false) {
+  setStashStatusMessage(importExportStatusMessageElement, message, isError);
+}
 
 // --- Stash Actions ---
-// handleStashCurrentTabClick, handleMarkConsumedClick remain the same
 async function handleStashCurrentTabClick() {
   setStashStatusMessage(stashStatusMessageElement, "Stashing...");
   try {
@@ -44,33 +66,59 @@ async function handleStashCurrentTabClick() {
       active: true,
       currentWindow: true,
     });
-    if (!activeTab || !activeTab.url) {
+    if (!activeTab) {
       setStashStatusMessage(
         stashStatusMessageElement,
-        "No active tab found or tab has no URL.",
-        true
-      );
-      return;
-    }
-    if (
-      activeTab.url.startsWith("chrome://") ||
-      activeTab.url.startsWith("chrome-extension://")
-    ) {
-      setStashStatusMessage(
-        stashStatusMessageElement,
-        "Cannot stash internal Chrome pages.",
+        "No active tab found.",
         true
       );
       return;
     }
 
     const originalInfo = getOriginalTabInfo(activeTab.url, activeTab.title);
+    console.log(
+      "Stash Current: Original Info:",
+      originalInfo,
+      "From Tab URL:",
+      activeTab.url
+    );
+
+    if (
+      !originalInfo.url ||
+      originalInfo.url.startsWith("chrome://") ||
+      (originalInfo.url.startsWith("chrome-extension://") &&
+        !originalInfo.isSuspended) ||
+      originalInfo.url.startsWith("about:")
+    ) {
+      setStashStatusMessage(
+        stashStatusMessageElement,
+        "Cannot stash internal Chrome pages or unresolved extension pages.",
+        true
+      );
+      console.warn(
+        "Stash Current: Attempted to stash an invalid/internal URL:",
+        originalInfo.url
+      );
+      return;
+    }
+
+    const tagsString = stashTagsInput.value.trim();
+    const tagsArray = tagsString
+      ? tagsString
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag !== "")
+      : [];
+
     const itemData = {
       title: originalInfo.title || originalInfo.url,
       url: originalInfo.url,
+      tags: tagsArray,
+      // dateCreated and dateUpdated will be handled by db.js
     };
-    const result = await stashOrUpdateItemDB(itemData);
+    console.log("Stash Current: Stashing itemData:", itemData);
 
+    const result = await stashOrUpdateItemDB(itemData);
     if (result.action === "added") {
       setStashStatusMessage(
         stashStatusMessageElement,
@@ -84,8 +132,9 @@ async function handleStashCurrentTabClick() {
         })`
       );
     }
-    await renderStashList(); // Refresh list completely
-    await updateHighlightingOnActiveTab(); // Update highlighting in case new URL added
+    stashTagsInput.value = "";
+    await renderStashList();
+    await updateHighlightingOnActiveTab();
   } catch (error) {
     console.error("Error stashing current tab:", error);
     setStashStatusMessage(
@@ -103,16 +152,25 @@ async function handleMarkConsumedClick() {
       active: true,
       currentWindow: true,
     });
-    if (!activeTab || !activeTab.url) {
+    if (!activeTab) {
       setStashStatusMessage(
         stashStatusMessageElement,
-        "No active tab found or tab has no URL.",
+        "No active tab found.",
+        true
+      );
+      return;
+    }
+    const originalInfo = getOriginalTabInfo(activeTab.url, activeTab.title);
+
+    if (!originalInfo.url) {
+      setStashStatusMessage(
+        stashStatusMessageElement,
+        "Cannot determine URL of the current tab.",
         true
       );
       return;
     }
 
-    const originalInfo = getOriginalTabInfo(activeTab.url, activeTab.title);
     const updatedCount = await updateStashItemConsumedDB(
       originalInfo.url,
       true
@@ -121,32 +179,35 @@ async function handleMarkConsumedClick() {
     if (updatedCount > 0) {
       setStashStatusMessage(
         stashStatusMessageElement,
-        `Marked "${originalInfo.title.substring(0, 50)}..." as consumed.`
+        `Marked "${(originalInfo.title || originalInfo.url).substring(
+          0,
+          50
+        )}..." as consumed.`
       );
-      // Update the item in the list visually without full re-render if possible
       const itemDiv = stashListElement.querySelector(
         `[data-url="${CSS.escape(originalInfo.url)}"]`
       );
       if (itemDiv) {
         const statusSpan = itemDiv.querySelector(".stash-item-status");
+        const titleLink = itemDiv.querySelector(".stash-item-title");
         if (statusSpan && !statusSpan.classList.contains("consumed")) {
           statusSpan.classList.remove("unread");
           statusSpan.classList.add("consumed");
           statusSpan.textContent = "Read";
           statusSpan.title = `Consumed: ${new Date().toLocaleString()}`;
-          // Update the underlying data in allStashedItems as well
-          const itemIndex = allStashedItems.findIndex(
-            (item) => item.url === originalInfo.url
-          );
-          if (itemIndex !== -1) {
-            allStashedItems[itemIndex].consumed = true;
-            allStashedItems[itemIndex].dateConsumed = new Date().toISOString();
-          }
+          titleLink?.classList.add("consumed-title-style");
+        }
+        const itemIndex = allStashedItems.findIndex(
+          (item) => item.url === originalInfo.url
+        );
+        if (itemIndex !== -1) {
+          allStashedItems[itemIndex].consumed = true;
+          allStashedItems[itemIndex].dateConsumed = new Date().toISOString();
         }
       } else {
-        await renderStashList(); // Fallback to full re-render if item not found
+        await renderStashList();
       }
-      await updateHighlightingOnActiveTab(); // Update highlighting as consumed status doesn't affect it
+      await updateHighlightingOnActiveTab();
     } else {
       setStashStatusMessage(
         stashStatusMessageElement,
@@ -163,14 +224,243 @@ async function handleMarkConsumedClick() {
   }
 }
 
+async function handleStashSelectedClick(shouldCloseTabs = false) {
+  console.log(
+    "Stash Selected: Starting operation. shouldCloseTabs:",
+    shouldCloseTabs
+  );
+
+  if (isStashingSelected) {
+    console.warn("Stash selected operation already in progress.");
+    return;
+  }
+  const selectedTabsDataFromUI = getSelectedTabData();
+  console.log(
+    "Stash Selected: Data from UI checkboxes:",
+    selectedTabsDataFromUI
+  );
+
+  if (selectedTabsDataFromUI.length === 0) {
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      "No tabs selected to stash.",
+      true
+    );
+    return;
+  }
+
+  // --- Confirmation for Stash & Close ---
+  if (shouldCloseTabs) {
+    if (
+      !window.confirm(
+        `Are you sure you want to stash ${selectedTabsDataFromUI.length} selected tab(s) and then close them?`
+      )
+    ) {
+      console.log("Stash Selected: User cancelled stash & close operation.");
+      return; // User cancelled
+    }
+  }
+
+  // Ensure isStashingSelected is reset and buttons are re-enabled even if errors occur
+  try {
+    isStashingSelected = true;
+    stashSelectedBtn.disabled = true;
+    stashCloseSelectedBtn.disabled = true;
+    const operationText = shouldCloseTabs ? "Stashing & Closing" : "Stashing";
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      `${operationText} ${selectedTabsDataFromUI.length} tab(s)...`
+    );
+
+    const tagsString = stashTagsInput.value.trim();
+    const tagsArray = tagsString
+      ? tagsString
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag !== "")
+      : [];
+    console.log("Stash Selected: Applying tags:", tagsArray);
+
+    let successCount = 0;
+    let errorCount = 0;
+    const successfullyStashedOriginalTabIds = [];
+
+    const stashPromises = selectedTabsDataFromUI.map(async (tabData) => {
+      const originalInfo = getOriginalTabInfo(tabData.url, tabData.title);
+      console.log(
+        `Stash Selected: Processing Tab ID ${tabData.id}, Original URL from checkbox data: ${tabData.url}, Parsed Original Info:`,
+        originalInfo
+      );
+
+      if (
+        !originalInfo.url ||
+        originalInfo.url.startsWith("chrome://") ||
+        (originalInfo.url.startsWith("chrome-extension://") &&
+          !originalInfo.isSuspended) ||
+        originalInfo.url.startsWith("about:")
+      ) {
+        console.warn(
+          `Stash Selected: Skipping invalid/internal URL: ${originalInfo.url} (Original tab ID: ${tabData.id})`
+        );
+        return {
+          status: "skipped",
+          reason: "Invalid or internal URL",
+          tabId: tabData.id,
+        };
+      }
+
+      console.log(
+        `Stash Selected: Preparing to stash tabId: ${tabData.id}, Stash URL: ${originalInfo.url}`
+      );
+      const itemToStash = {
+        title: originalInfo.title || originalInfo.url,
+        url: originalInfo.url,
+        tags: tagsArray,
+        // dateCreated and dateUpdated handled by db.js
+      };
+
+      try {
+        const result = await stashOrUpdateItemDB(itemToStash);
+        console.log(
+          `Stash Selected: Stash successful for tabId: ${tabData.id}, Result:`,
+          result
+        );
+        return { ...result, tabId: tabData.id, stashed: true };
+      } catch (error) {
+        console.error(
+          `Stash Selected: Stash failed for tabId: ${tabData.id}, URL: ${itemToStash.url}, Error:`,
+          error
+        );
+        return { error: error, tabId: tabData.id, stashed: false };
+      }
+    });
+
+    const results = await Promise.allSettled(stashPromises);
+    console.log(
+      "Stash Selected: Stash operation results (allSettled):",
+      results
+    );
+
+    results.forEach((result) => {
+      if (result.status === "fulfilled") {
+        if (result.value.stashed && result.value.action) {
+          successCount++;
+          if (result.value.tabId !== undefined) {
+            successfullyStashedOriginalTabIds.push(result.value.tabId);
+          }
+        } else if (result.value.status === "skipped") {
+          console.log(
+            `Stash Selected: Skipped tab ID ${
+              result.value.tabId || "unknown"
+            }:`,
+            result.value.reason
+          );
+        } else if (result.value.error) {
+          errorCount++;
+        }
+      } else if (result.status === "rejected") {
+        errorCount++;
+        console.error(
+          `Stash Selected: Promise rejected (unexpected). Tab ID ${
+            result.reason?.tabId || "unknown"
+          }. Reason:`,
+          result.reason?.error || result.reason
+        );
+      }
+    });
+
+    console.log(
+      "Stash Selected: Successfully stashed tab IDs to potentially close:",
+      successfullyStashedOriginalTabIds
+    );
+    console.log(
+      `Stash Selected: Final counts - Success: ${successCount}, Error: ${errorCount}`
+    );
+
+    let finalMessage = `${operationText} complete. Stashed/Updated: ${successCount}.`;
+    if (errorCount > 0) {
+      finalMessage += ` Errors: ${errorCount}.`;
+    }
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      finalMessage,
+      errorCount > 0
+    );
+
+    stashTagsInput.value = "";
+    // Always clear selected tabs, regardless of success or failure to ensure consistent state
+    clearSelectedTabs();
+
+    console.log(
+      `Stash Selected: Checking close condition: shouldCloseTabs=${shouldCloseTabs}, successfullyStashedOriginalTabIds.length=${successfullyStashedOriginalTabIds.length}`
+    );
+    if (shouldCloseTabs && successfullyStashedOriginalTabIds.length > 0) {
+      setStashStatusMessage(
+        stashStatusMessageElement,
+        `${finalMessage} Closing ${successfullyStashedOriginalTabIds.length} tab(s)...`,
+        errorCount > 0
+      );
+      console.log(
+        "Stash Selected: Attempting to close tabs:",
+        successfullyStashedOriginalTabIds
+      );
+      try {
+        await chrome.tabs.remove(successfullyStashedOriginalTabIds);
+        console.log("Stash Selected: Tabs closed successfully.");
+        setStashStatusMessage(
+          stashStatusMessageElement,
+          `${operationText} ${successCount} tab(s) and closed them.`,
+          errorCount > 0
+        );
+      } catch (closeError) {
+        console.error(
+          "Stash Selected: Error closing stashed tabs:",
+          closeError
+        );
+        setStashStatusMessage(
+          stashStatusMessageElement,
+          "Stashing complete, but error occurred during tab closing.",
+          true
+        );
+      }
+    } else {
+      console.log(
+        "Stash Selected: Skipping tab closing (condition not met or no tabs successfully stashed)."
+      );
+    }
+
+    console.log("Stash Selected: Refreshing stash list and highlighting.");
+    await renderStashList();
+    await updateHighlightingOnActiveTab();
+  } catch (error) {
+    // Catch any unexpected errors from the main try block
+    console.error("Stash Selected: Unhandled error during operation:", error);
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      "An unexpected error occurred during stashing.",
+      true
+    );
+  } finally {
+    isStashingSelected = false;
+    stashSelectedBtn.disabled = false;
+    stashCloseSelectedBtn.disabled = false;
+  }
+  console.log("Stash Selected: Operation finished.");
+}
+
 // --- Stash List Rendering & Infinite Scroll ---
-// createSingleStashItemElement, appendItemsPage, renderStashList remain the same
+
 function createSingleStashItemElement(item) {
   const itemDiv = document.createElement("div");
   itemDiv.className = "stash-item";
   itemDiv.dataset.id = item.id;
   itemDiv.dataset.url = item.url;
 
+  // --- Status Area (Left) ---
+  const statusArea = document.createElement("div");
+  statusArea.className = "stash-item-status-area";
+
+  // Status Indicator
   const statusSpan = document.createElement("span");
   statusSpan.className = "stash-item-status";
   if (item.consumed) {
@@ -183,8 +473,24 @@ function createSingleStashItemElement(item) {
     statusSpan.classList.add("unread");
     statusSpan.textContent = "Unread";
   }
-  itemDiv.appendChild(statusSpan);
+  statusArea.appendChild(statusSpan);
 
+  // Favorite Button
+  const favoriteBtn = document.createElement("button");
+  favoriteBtn.className = "stash-item-favorite-btn";
+  favoriteBtn.innerHTML = item.favorite ? "★" : "☆";
+  favoriteBtn.title = item.favorite
+    ? "Remove from favorites"
+    : "Add to favorites";
+  favoriteBtn.dataset.itemId = item.id;
+  if (item.favorite) {
+    favoriteBtn.classList.add("favorited");
+  }
+  statusArea.appendChild(favoriteBtn);
+
+  itemDiv.appendChild(statusArea);
+
+  // --- Main Info (Center) ---
   const infoDiv = document.createElement("div");
   infoDiv.className = "stash-item-info";
   const titleLink = document.createElement("a");
@@ -193,6 +499,9 @@ function createSingleStashItemElement(item) {
   titleLink.href = item.url;
   titleLink.title = item.url;
   titleLink.target = "_blank";
+  if (item.consumed) {
+    titleLink.classList.add("consumed-title-style");
+  }
   infoDiv.appendChild(titleLink);
   const urlSpan = document.createElement("span");
   urlSpan.className = "stash-item-url";
@@ -202,36 +511,55 @@ function createSingleStashItemElement(item) {
     urlSpan.textContent = item.url;
   }
   infoDiv.appendChild(urlSpan);
+  if (item.tags && item.tags.length > 0) {
+    const tagsContainer = document.createElement("div");
+    tagsContainer.className = "stash-item-tags";
+    item.tags.forEach((tag) => {
+      const tagSpan = document.createElement("span");
+      tagSpan.className = "stash-tag";
+      tagSpan.textContent = tag;
+      tagsContainer.appendChild(tagSpan);
+    });
+    infoDiv.appendChild(tagsContainer);
+  }
   itemDiv.appendChild(infoDiv);
+
+  // --- Actions Container (Right) ---
+  const actionsContainer = document.createElement("div");
+  actionsContainer.className = "stash-item-actions-container";
 
   const countSpan = document.createElement("span");
   countSpan.className = "stash-item-count";
   countSpan.textContent = `(${item.stashCount || 1})`;
   countSpan.title = `Stashed ${item.stashCount || 1} time(s)`;
-  itemDiv.appendChild(countSpan);
-
-  const dateSpan = document.createElement("span");
-  dateSpan.className = "stash-item-date";
-  dateSpan.textContent = new Date(item.dateCreated).toLocaleDateString();
-  dateSpan.title = `Last Stashed: ${new Date(
-    item.dateCreated
-  ).toLocaleString()}`;
-  itemDiv.appendChild(dateSpan);
+  actionsContainer.appendChild(countSpan);
 
   const removeBtn = document.createElement("button");
   removeBtn.className = "stash-item-remove-btn";
   removeBtn.textContent = "×";
   removeBtn.title = "Remove this item from stash";
   removeBtn.dataset.itemId = item.id;
-  itemDiv.appendChild(removeBtn);
+  actionsContainer.appendChild(removeBtn);
+
+  itemDiv.appendChild(actionsContainer);
+
+  // Date Stashed (Hidden by CSS, used for sorting and tooltip)
+  const dateSpan = document.createElement("span");
+  dateSpan.className = "stash-item-date"; // Keep for potential CSS use
+  // Display the *last updated* date in the tooltip for clarity with new sorting
+  const displayDate = item.dateUpdated || item.dateCreated;
+  dateSpan.textContent = new Date(displayDate).toLocaleDateString();
+  dateSpan.title = `Last Stashed: ${new Date(displayDate).toLocaleString()}`;
+  dateSpan.style.display = "none";
+  infoDiv.appendChild(dateSpan); // Append to infoDiv to associate with title/url
 
   return itemDiv;
 }
 
 function appendItemsPage() {
   if (isLoadingMore) return;
-
   isLoadingMore = true;
+
   const existingLoader = stashListElement.querySelector(".loading-indicator");
   if (existingLoader) existingLoader.remove();
 
@@ -240,7 +568,18 @@ function appendItemsPage() {
   const itemsToRender = allStashedItems.slice(startIndex, endIndex);
 
   if (itemsToRender.length === 0 && currentPage === 1) {
-    stashListElement.innerHTML = "<p>No stashed items match filters.</p>";
+    const currentSearch = stashSearchInput.value.trim();
+    const currentFilter = stashFilterSelect.value;
+    let message = "No stashed items found.";
+    if (currentFilter === "favorites") {
+      message = "No favorite items found.";
+    } else if (currentFilter === "unread") {
+      message = "No unread items found.";
+    }
+    if (currentSearch) {
+      message += ` Matching "${currentSearch}".`;
+    }
+    stashListElement.innerHTML = `<p>${message}</p>`;
     isLoadingMore = false;
     return;
   }
@@ -264,29 +603,55 @@ function appendItemsPage() {
 
 export async function renderStashList() {
   try {
-    if (currentPage === 1) {
+    if (currentPage === 1 && !stashListElement.hasChildNodes()) {
       stashListElement.innerHTML = "<p>Loading stashed items...</p>";
     }
+
     let items = await getAllStashItemsDB();
 
     const filterValue = stashFilterSelect.value;
     if (filterValue === "unread") {
       items = items.filter((item) => !item.consumed);
+    } else if (filterValue === "favorites") {
+      items = items.filter((item) => item.favorite === true);
     }
-    const searchTerm = stashSearchInput.value.toLowerCase().trim();
-    if (searchTerm) {
-      items = items.filter(
-        (item) =>
-          (item.title && item.title.toLowerCase().includes(searchTerm)) ||
-          (item.url && item.url.toLowerCase().includes(searchTerm))
-      );
+
+    const fullSearchTerm = stashSearchInput.value.trim();
+    const fullSearchTermLower = fullSearchTerm.toLowerCase();
+    const searchTags = fullSearchTerm
+      .split(",")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter((tag) => tag !== "");
+
+    if (fullSearchTermLower) {
+      items = items.filter((item) => {
+        const titleMatch =
+          item.title && item.title.toLowerCase().includes(fullSearchTermLower);
+        const urlMatch =
+          item.url && item.url.toLowerCase().includes(fullSearchTermLower);
+        let tagsMatch = false;
+        if (
+          searchTags.length > 0 &&
+          Array.isArray(item.tags) &&
+          item.tags.length > 0
+        ) {
+          const itemTagsLower = item.tags.map((t) => t.toLowerCase());
+          tagsMatch = searchTags.every((searchTag) =>
+            itemTagsLower.includes(searchTag)
+          );
+        }
+        return titleMatch || urlMatch || tagsMatch;
+      });
     }
 
     const sortValue = stashSortSelect.value;
     items.sort((a, b) => {
       switch (sortValue) {
-        case "dateAsc":
-          return new Date(a.dateCreated) - new Date(b.dateCreated);
+        case "dateAsc": // Oldest (based on last update)
+          return (
+            new Date(a.dateUpdated || a.dateCreated) -
+            new Date(b.dateUpdated || b.dateCreated)
+          );
         case "titleAsc":
           return (a.title || "").localeCompare(b.title || "");
         case "titleDesc":
@@ -295,15 +660,24 @@ export async function renderStashList() {
           return a.consumed === b.consumed ? 0 : a.consumed ? -1 : 1;
         case "consumedFalse":
           return a.consumed === b.consumed ? 0 : a.consumed ? 1 : -1;
-        case "dateDesc":
+        // *** ADDED CASES FOR STASH COUNT SORTING ***
+        case "stashCountDesc": // Most stashed
+          return (b.stashCount || 0) - (a.stashCount || 0);
+        case "stashCountAsc": // Least stashed
+          return (a.stashCount || 0) - (b.stashCount || 0);
+        // *** END ADDED CASES ***
+        case "dateDesc": // Newest (based on last update) - DEFAULT
         default:
-          return new Date(b.dateCreated) - new Date(a.dateCreated);
+          return (
+            new Date(b.dateUpdated || b.dateCreated) -
+            new Date(a.dateUpdated || a.dateCreated)
+          );
       }
     });
 
     allStashedItems = items;
     currentPage = 1;
-    stashListElement.innerHTML = ""; // Clear before rendering first page
+    stashListElement.innerHTML = "";
     appendItemsPage();
   } catch (error) {
     console.error("Error rendering stash list:", error);
@@ -326,21 +700,19 @@ const handleScroll = debounce(() => {
       stashListElement.scrollTop -
       stashListElement.clientHeight <
     SCROLL_THRESHOLD;
-  if (
-    nearBottom &&
-    (currentPage - 1) * ITEMS_PER_PAGE < allStashedItems.length
-  ) {
+  const hasMoreItems =
+    (currentPage - 1) * ITEMS_PER_PAGE < allStashedItems.length;
+
+  if (nearBottom && hasMoreItems) {
+    console.log("Near bottom and more items exist, loading next page...");
     appendItemsPage();
   }
 }, 100);
 
-// --- Remove Stashed Item Logic ---
-// handleRemoveItemClick remains the same
 async function handleRemoveItemClick(event) {
-  if (!event.target.classList.contains("stash-item-remove-btn")) {
-    return;
-  }
-  const button = event.target;
+  const button = event.target.closest(".stash-item-remove-btn");
+  if (!button) return;
+
   const itemId = parseInt(button.dataset.itemId, 10);
   const itemDiv = button.closest(".stash-item");
   const itemUrl = itemDiv?.dataset.url;
@@ -375,8 +747,69 @@ async function handleRemoveItemClick(event) {
   }
 }
 
-// --- Link Highlighting Logic ---
-// loadHighlightState, saveHighlightState, updateHighlightButtonState remain the same
+async function handleToggleFavoriteClick(event) {
+  const button = event.target.closest(".stash-item-favorite-btn");
+  if (!button) return;
+
+  const itemId = parseInt(button.dataset.itemId, 10);
+  if (isNaN(itemId)) {
+    console.error("Invalid item ID for favorite toggle.");
+    return;
+  }
+  const itemDiv = button.closest(".stash-item");
+  if (!itemDiv) {
+    console.error("Could not find parent item div for favorite toggle.");
+    return;
+  }
+  const isCurrentlyFavorite = button.classList.contains("favorited");
+  const newFavoriteState = !isCurrentlyFavorite;
+  console.log(`Toggling favorite for item ${itemId} to ${newFavoriteState}`);
+
+  button.classList.toggle("favorited", newFavoriteState);
+  button.innerHTML = newFavoriteState ? "★" : "☆";
+  button.title = newFavoriteState
+    ? "Remove from favorites"
+    : "Add to favorites";
+  try {
+    await updateStashItemFavoriteDB(itemId, newFavoriteState);
+    console.log(
+      `Successfully updated favorite status in DB for item ${itemId}`
+    );
+    const itemIndex = allStashedItems.findIndex((item) => item.id === itemId);
+    if (itemIndex !== -1) {
+      allStashedItems[itemIndex].favorite = newFavoriteState;
+      console.log(
+        `Local cache 'allStashedItems' updated for item ${itemId}. New state: ${newFavoriteState}`
+      );
+    } else {
+      console.warn(
+        `Item ${itemId} not found in current 'allStashedItems' cache after favorite update.`
+      );
+    }
+    if (stashFilterSelect.value === "favorites" && !newFavoriteState) {
+      console.log(
+        `Item ${itemId} unfavorited while 'Favorites Only' filter is active. Removing from DOM.`
+      );
+      itemDiv.remove();
+      if (!stashListElement.hasChildNodes()) {
+        stashListElement.innerHTML = `<p>No favorite items found.</p>`;
+      }
+    }
+  } catch (error) {
+    console.error(`Error updating favorite status for item ${itemId}:`, error);
+    setStashStatusMessage(
+      stashStatusMessageElement,
+      "Error updating favorite.",
+      true
+    );
+    button.classList.toggle("favorited", isCurrentlyFavorite);
+    button.innerHTML = isCurrentlyFavorite ? "★" : "☆";
+    button.title = isCurrentlyFavorite
+      ? "Remove from favorites"
+      : "Add to favorites";
+  }
+}
+
 async function loadHighlightState() {
   try {
     const result = await chrome.storage.local.get(HIGHLIGHT_STORAGE_KEY);
@@ -389,7 +822,6 @@ async function loadHighlightState() {
     updateHighlightButtonState();
   }
 }
-
 async function saveHighlightState() {
   try {
     await chrome.storage.local.set({
@@ -400,7 +832,6 @@ async function saveHighlightState() {
     console.error("Error saving highlight state:", error);
   }
 }
-
 function updateHighlightButtonState() {
   if (highlightToggleButton) {
     highlightToggleButton.classList.toggle("active", isHighlightingEnabled);
@@ -412,8 +843,6 @@ function updateHighlightButtonState() {
       : "Click to enable highlighting stashed links on the current page";
   }
 }
-
-// *** EXPORT this function ***
 export async function updateHighlightingOnActiveTab() {
   let stashedUrls = [];
   if (isHighlightingEnabled) {
@@ -432,7 +861,6 @@ export async function updateHighlightingOnActiveTab() {
   } else {
     console.log("Highlighting: Disabled, sending empty URL list.");
   }
-
   try {
     const [activeTab] = await chrome.tabs.query({
       active: true,
@@ -442,13 +870,15 @@ export async function updateHighlightingOnActiveTab() {
       activeTab &&
       activeTab.id &&
       activeTab.url &&
-      !activeTab.url.startsWith("chrome") &&
-      !activeTab.url.startsWith("about:")
+      !activeTab.url.startsWith("chrome:") &&
+      !activeTab.url.startsWith("about:") &&
+      !activeTab.url.startsWith("moz-extension:") &&
+      !activeTab.url.startsWith("file:") &&
+      !activeTab.url.startsWith(chrome.runtime.getURL(""))
     ) {
       console.log(
         `Highlighting: Sending UPDATE_HIGHLIGHTING to tab ${activeTab.id}: enabled=${isHighlightingEnabled}, urlCount=${stashedUrls.length}`
       );
-      // Use a try-catch specifically around sendMessage
       try {
         await chrome.tabs.sendMessage(activeTab.id, {
           type: "UPDATE_HIGHLIGHTING",
@@ -468,7 +898,7 @@ export async function updateHighlightingOnActiveTab() {
           );
         } else {
           console.error(
-            "Highlighting: Error sending update message:",
+            `Highlighting: Error sending update message to tab ${activeTab?.id}:`,
             sendError
           );
           setStashStatusMessage(
@@ -480,12 +910,11 @@ export async function updateHighlightingOnActiveTab() {
       }
     } else {
       console.log(
-        "Highlighting: No suitable active tab found to send highlight update.",
-        activeTab
+        "Highlighting: No suitable active tab found to send highlight update (might be internal page or no URL).",
+        activeTab?.url
       );
     }
   } catch (queryError) {
-    // Error querying tabs
     console.error("Highlighting: Error querying active tab:", queryError);
     setStashStatusMessage(
       stashStatusMessageElement,
@@ -494,31 +923,271 @@ export async function updateHighlightingOnActiveTab() {
     );
   }
 }
-
 async function handleHighlightToggleClick() {
   isHighlightingEnabled = !isHighlightingEnabled;
   console.log("Highlight toggle clicked. New state:", isHighlightingEnabled);
   updateHighlightButtonState();
   await saveHighlightState();
-  await updateHighlightingOnActiveTab(); // Send update immediately
+  await updateHighlightingOnActiveTab();
 }
 
-// --- Setup ---
+async function loadProfileName() {
+  if (!profileNameInput) return;
+  try {
+    const result = await chrome.storage.local.get(PROFILE_NAME_STORAGE_KEY);
+    const savedName = result[PROFILE_NAME_STORAGE_KEY] || "";
+    profileNameInput.value = savedName;
+    console.log("Profile name loaded:", savedName);
+  } catch (error) {
+    console.error("Error loading profile name:", error);
+    profileNameInput.value = "";
+  }
+}
+
+async function saveProfileName() {
+  if (!profileNameInput) return;
+  const nameToSave = profileNameInput.value.trim();
+  try {
+    await chrome.storage.local.set({ [PROFILE_NAME_STORAGE_KEY]: nameToSave });
+    console.log("Profile name saved:", nameToSave);
+  } catch (error) {
+    console.error("Error saving profile name:", error);
+  }
+}
+const debouncedSaveProfileName = debounce(saveProfileName, 500);
+
+async function handleExportClick() {
+  if (isExporting) return;
+  isExporting = true;
+  exportStashBtn.disabled = true;
+  setImportExportStatus("Exporting stash...");
+  try {
+    const items = await getAllStashItemsDB();
+    if (items.length === 0) {
+      setImportExportStatus("Stash is empty, nothing to export.");
+      isExporting = false;
+      exportStashBtn.disabled = false;
+      return;
+    }
+    const profileName = profileNameInput.value.trim();
+    const safeProfileName = profileName
+      ? profileName.replace(/[^a-z0-9]/gi, "_").toLowerCase()
+      : "profile";
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const filename = `${safeProfileName}-stash-export-${timestamp}.json`;
+    const dataStr = JSON.stringify(items, null, 2);
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setImportExportStatus(
+      `Exported ${items.length} items successfully to ${filename}.`
+    );
+    console.log(`Exported ${items.length} items to ${filename}.`);
+  } catch (error) {
+    console.error("Error exporting stash:", error);
+    setImportExportStatus("Error exporting stash.", true);
+  } finally {
+    isExporting = false;
+    exportStashBtn.disabled = false;
+  }
+}
+
+function handleImportClick() {
+  try {
+    importStashInput.value = null;
+    console.log("Import Stash: Reset input value before click.");
+  } catch (e) {
+    console.warn("Import Stash: Could not reset input value before click.", e);
+  }
+  importStashInput.click();
+}
+
+async function handleFileSelect(event) {
+  console.log("Import Stash: File selection event triggered.");
+  const currentInput = event.target;
+
+  if (isImporting) {
+    console.warn("Import Stash: Import already in progress. Ignoring.");
+    currentInput.value = null;
+    return;
+  }
+  const file = currentInput.files[0];
+  if (!file) {
+    console.log("Import Stash: No file selected (user likely cancelled).");
+    currentInput.value = null;
+    return;
+  }
+
+  isImporting = true;
+  importStashBtn.disabled = true;
+  setImportExportStatus(`Importing from ${file.name}...`);
+  console.log(`Import Stash: Starting import from file: ${file.name}`);
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    console.log("Import Stash: File loaded by FileReader.");
+    let importedItems;
+    try {
+      importedItems = JSON.parse(e.target.result);
+      if (!Array.isArray(importedItems)) {
+        throw new Error("Invalid format: Imported file is not a JSON array.");
+      }
+      console.log(
+        `Import Stash: Parsed ${importedItems.length} items from JSON.`
+      );
+    } catch (error) {
+      console.error("Import Stash: Error parsing import file:", error);
+      setImportExportStatus(`Error reading file: ${error.message}`, true);
+      isImporting = false;
+      importStashBtn.disabled = false;
+      console.log(
+        "Import Stash (Parse Error): Resetting file input value before:",
+        currentInput.value
+      );
+      currentInput.value = null;
+      console.log(
+        "Import Stash (Parse Error): Resetting file input value after:",
+        currentInput.value
+      );
+      return;
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+    const importPromises = importedItems.map((item) => {
+      if (
+        !item ||
+        typeof item.url !== "string" ||
+        typeof item.title !== "string"
+      ) {
+        console.warn("Import Stash: Skipping invalid item structure:", item);
+        return Promise.resolve({
+          status: "skipped",
+          reason: "Invalid item structure",
+        });
+      }
+      // *** Prepare itemData with ALL fields, including dateCreated and dateUpdated ***
+      const itemData = {
+        url: item.url,
+        title: item.title,
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        dateCreated: item.dateCreated, // Pass along if present
+        dateUpdated: item.dateUpdated, // Pass along if present
+        favorite: typeof item.favorite === "boolean" ? item.favorite : false,
+        consumed: typeof item.consumed === "boolean" ? item.consumed : false,
+        dateConsumed: item.dateConsumed, // Pass along if present
+        stashCount:
+          typeof item.stashCount === "number" && item.stashCount > 0
+            ? item.stashCount
+            : 1,
+      };
+      return stashOrUpdateItemDB(itemData);
+    });
+
+    const results = await Promise.allSettled(importPromises);
+    console.log("Import Stash: DB operation results:", results);
+
+    results.forEach((result) => {
+      if (result.status === "fulfilled" && result.value.action) {
+        successCount++;
+      } else if (result.status === "rejected") {
+        errorCount++;
+        console.error("Import Stash: Error importing one item:", result.reason);
+      }
+    });
+
+    let finalMessage = `Import complete. Added/Updated: ${successCount}.`;
+    if (errorCount > 0) {
+      finalMessage += ` Errors: ${errorCount}.`;
+    }
+    setImportExportStatus(finalMessage, errorCount > 0);
+    console.log("Import Stash: ", finalMessage);
+
+    await renderStashList();
+    await updateHighlightingOnActiveTab();
+
+    isImporting = false;
+    importStashBtn.disabled = false;
+    console.log(
+      "Import Stash (Success): Resetting file input value before:",
+      currentInput.value
+    );
+    currentInput.value = null;
+    console.log(
+      "Import Stash (Success): Resetting file input value after:",
+      currentInput.value
+    );
+  };
+
+  reader.onerror = (e) => {
+    console.error("Import Stash: File reading error:", e);
+    setImportExportStatus("Error reading file.", true);
+    isImporting = false;
+    importStashBtn.disabled = false;
+    console.log(
+      "Import Stash (Read Error): Resetting file input value before:",
+      currentInput.value
+    );
+    currentInput.value = null;
+    console.log(
+      "Import Stash (Read Error): Resetting file input value after:",
+      currentInput.value
+    );
+  };
+  reader.readAsText(file);
+}
+
 export async function setupStashUI() {
-  // Listeners
+  if (stashCurrentTabBtn.dataset.listenerAttached === "true") {
+    console.warn("Stash UI listeners already attached.");
+    return;
+  }
+  console.log("Attaching Stash UI listeners...");
+
   stashCurrentTabBtn.addEventListener("click", handleStashCurrentTabClick);
   markConsumedBtn.addEventListener("click", handleMarkConsumedClick);
+  highlightToggleButton.addEventListener("click", handleHighlightToggleClick);
+  stashSelectedBtn.addEventListener("click", () =>
+    handleStashSelectedClick(false)
+  );
+  stashCloseSelectedBtn.addEventListener("click", () =>
+    handleStashSelectedClick(true)
+  );
+  exportStashBtn.addEventListener("click", handleExportClick);
+  importStashBtn.addEventListener("click", handleImportClick);
+  importStashInput.addEventListener("change", handleFileSelect);
+
+  if (profileNameInput) {
+    profileNameInput.addEventListener("input", debouncedSaveProfileName);
+  }
+
   stashSearchInput.addEventListener("input", debouncedRenderStashList);
   stashSortSelect.addEventListener("change", renderStashList);
   stashFilterSelect.addEventListener("change", renderStashList);
-  highlightToggleButton.addEventListener("click", handleHighlightToggleClick);
+
+  stashTagsInput.addEventListener("keypress", (event) => {
+    if (event.key === "Enter") {
+      handleStashCurrentTabClick();
+    }
+  });
+
   stashListElement.addEventListener("scroll", handleScroll);
-  stashListElement.addEventListener("click", handleRemoveItemClick);
+  stashListElement.addEventListener("click", (event) => {
+    if (event.target.closest(".stash-item-remove-btn")) {
+      handleRemoveItemClick(event);
+    } else if (event.target.closest(".stash-item-favorite-btn")) {
+      handleToggleFavoriteClick(event);
+    }
+  });
 
-  // Initial state load
+  stashCurrentTabBtn.dataset.listenerAttached = "true";
   await loadHighlightState();
-
-  // Initial render is triggered by sidebar.js
-  // ** REMOVED: await updateHighlightingOnActiveTab(); **
-  // This is now called by sidebar.js after initial renderAllLists
+  await loadProfileName();
+  console.log("Stash UI setup complete.");
 }

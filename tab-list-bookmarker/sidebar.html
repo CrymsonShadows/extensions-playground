@@ -27,25 +27,32 @@
                 </div>
                 <div class="tab-content">
                     <div id="bookmark-settings" class="tab-panel active">
+                        <h3>Bookmark Selected Tabs</h3>
                         <label for="new-folder-name">New Folder Name:</label>
                         <input type="text" id="new-folder-name" placeholder="Optional: leave blank to add to selected folder" class="input-field">
-                        <label>Place New Folder Inside:</label>
+                        <label>Place New Folder Inside / Select Folder to Stash:</label>
                         <div id="selected-folder-display" class="selected-folder-display">Select a folder below...</div>
-                        <div id="bookmark-tree-container" class="bookmark-tree-container">
-                            <p>Loading folders...</p>
-                        </div>
+                        <div id="bookmark-tree-container" class="bookmark-tree-container"> <p>Loading folders...</p> </div>
                         <input type="hidden" id="selected-folder-id">
                         <div class="button-group">
-                             <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected</button>
-                             <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete</button>
+                             <button id="bookmark-selected-btn" class="btn bookmark-btn">Bookmark Selected Tabs</button>
+                             <button id="bookmark-delete-btn" class="btn delete-btn">Bookmark & Delete Tabs</button>
+                        </div>
+                        <hr class="section-divider">
+                        <h3>Stash Bookmarks From Selected Folder</h3>
+                        <div class="bookmark-stash-tags-container">
+                            <label for="bookmark-stash-tags-input">Tags to Apply (comma-separated):</label>
+                            <input type="text" id="bookmark-stash-tags-input" class="input-field bookmark-stash-tags-input" placeholder="e.g., import, reading-list">
+                        </div>
+                        <div class="button-group">
+                            <button id="stash-folder-btn" class="btn stash-btn">Stash Folder Bookmarks</button>
+                            <button id="stash-delete-folder-btn" class="btn stash-btn delete-btn">Stash & Delete Bookmarks</button>
                         </div>
                         <p id="status-message" class="status-message"></p>
                     </div>
                     <div id="group-settings" class="tab-panel">
                          <label for="target-group-select">Target Group:</label>
-                         <select id="target-group-select" class="input-field">
-                             <option value="">Loading groups...</option>
-                         </select>
+                         <select id="target-group-select" class="input-field"> <option value="">Loading groups...</option> </select>
                          <div id="new-group-options" class="new-group-options hidden">
                               <label for="new-group-name">New Group Name:</label>
                               <input type="text" id="new-group-name" placeholder="Optional group name" class="input-field">
@@ -61,9 +68,17 @@
                     </div>
                     <div id="stash-settings" class="tab-panel">
                         <h3>Stash / Read Later</h3>
+                        <div class="stash-tags-input-container">
+                            <label for="stash-tags-input">Tags (comma-separated):</label>
+                            <input type="text" id="stash-tags-input" class="input-field stash-tags-input" placeholder="e.g., work, project-x, reading">
+                        </div>
                         <div class="button-group stash-actions">
                             <button id="stash-current-tab-btn" class="btn stash-btn">Stash Current Tab</button>
                             <button id="mark-consumed-btn" class="btn consumed-btn">Mark Current as Consumed</button>
+                        </div>
+                        <div class="button-group stash-selected-actions">
+                            <button id="stash-selected-btn" class="btn stash-btn">Stash Selected Tabs</button>
+                            <button id="stash-close-selected-btn" class="btn stash-btn delete-btn">Stash & Close Selected</button>
                         </div>
                         <p id="stash-status-message" class="status-message"></p>
                         <hr class="section-divider">
@@ -73,8 +88,8 @@
                                 <select id="stash-filter" class="input-field stash-filter-select">
                                     <option value="all">Show All</option>
                                     <option value="unread">Show Unread Only</option>
-                                </select>
-                                <input type="search" id="stash-search" placeholder="Search stash..." class="input-field">
+                                    <option value="favorites">Show Favorites Only</option> </select>
+                                <input type="search" id="stash-search" placeholder="Search title/url, or tags (e.g., tag1,tag2)" class="input-field">
                                 <select id="stash-sort" class="input-field stash-sort-select">
                                     <option value="dateDesc">Date Stashed (Newest)</option>
                                     <option value="dateAsc">Date Stashed (Oldest)</option>
@@ -82,10 +97,26 @@
                                     <option value="titleDesc">Title (Z-A)</option>
                                     <option value="consumedFalse">Status (Unread First)</option>
                                     <option value="consumedTrue">Status (Read First)</option>
-                                </select>
+                                    <option value="stashCountDesc">Times Stashed (Most)</option>
+                                    <option value="stashCountAsc">Times Stashed (Least)</option>
+                                    </select>
                                 <button id="highlight-toggle-btn" class="btn toggle-btn" title="Toggle highlighting of links on the current page that point to stashed URLs">
                                     Highlight Links </button>
                             </div>
+                        </div>
+                        <hr class="section-divider">
+                        <div class="stash-import-export-section">
+                            <h4>Import / Export Stash</h4>
+                            <div class="profile-name-container">
+                                <label for="profile-name-input">Profile Name (for Export Filename):</label>
+                                <input type="text" id="profile-name-input" class="input-field profile-name-input" placeholder="e.g., Work, Personal (Optional)">
+                            </div>
+                            <div class="button-group">
+                                <button id="export-stash-btn" class="btn export-btn">Export Stash</button>
+                                <input type="file" id="import-stash-input" accept=".json" style="display: none;">
+                                <button id="import-stash-btn" class="btn import-btn">Import Stash</button>
+                            </div>
+                             <p id="import-export-status-message" class="status-message"></p>
                         </div>
                     </div>
                 </div>
@@ -97,7 +128,6 @@
                 <button class="list-tab-btn active" data-target="main-tab-list-area">Current Tabs</button>
                 <button class="list-tab-btn" data-target="stash-list-area">Stashed Items</button>
             </div>
-
             <div id="main-tab-list-area" class="main-tab-list-area list-panel active">
                 <div class="tabs-header">
                      <h2>Current Tabs <span id="selected-count" class="selected-count-display">(0)</span></h2>
@@ -113,20 +143,14 @@
                     <input type="search" id="tab-search-input" placeholder="Search current tabs..." class="input-field tab-search-input">
                 </div>
                 <p id="tab-list-status-message" class="status-message"></p>
-                <div id="tab-list" class="tab-list">
-                    <p>Loading tabs...</p>
-                </div>
+                <div id="tab-list" class="tab-list"> <p>Loading tabs...</p> </div>
             </div>
-
             <div id="stash-list-area" class="stash-list-area list-panel">
-                 <div id="stash-list" class="stash-list">
-                     <p>Loading stashed items...</p>
-                 </div>
+                 <div id="stash-list" class="stash-list"> <p>Loading stashed items...</p> </div>
             </div>
         </div>
 
     </div>
-
     <script type="module" src="sidebar.js"></script>
 </body>
 </html>

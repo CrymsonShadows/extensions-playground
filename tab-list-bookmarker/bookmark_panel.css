@@ -105,3 +105,39 @@
   background-color: #c9302c;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
+
+/* NEW: Styles for Stash Bookmarks section */
+.bookmark-stash-tags-container {
+  margin-top: 10px; /* Space above tags input */
+  margin-bottom: 10px;
+}
+.bookmark-stash-tags-container label {
+  display: block;
+  font-size: 0.85em;
+  margin-bottom: 3px;
+  color: #555;
+  font-weight: bold;
+}
+.bookmark-stash-tags-input {
+  /* Inherits .input-field */
+  margin-bottom: 0;
+}
+
+/* Use stash button styles for consistency */
+.btn.stash-btn {
+  background-color: #7a6ff0; /* Purple */
+  color: white;
+  border-color: #6155cc;
+}
+.btn.stash-btn:hover {
+  background-color: #6155cc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+/* Combine stash and delete styles */
+.btn.stash-btn.delete-btn {
+  background-color: #d9534f; /* Red */
+  border-color: #c9302c;
+}
+.btn.stash-btn.delete-btn:hover {
+  background-color: #c9302c;
+}

@@ -1,14 +1,14 @@
 // sidebar.js - Main Entry Point
 
 // Import setup functions for different UI sections
-import { setupActionTabs, setupListTabs } from "./ui.js"; // Updated ui.js exports
+import { setupActionTabs, setupListTabs } from "./ui.js";
 import {
   renderTabs,
   setupTabsUI,
   clearSelectedTabs as clearTabSelection,
 } from "./tabs_ui.js";
 import { renderBookmarkTree, setupBookmarksUI } from "./bookmarks_ui.js";
-import { setupGroupingUI, loadExistingGroups } from "./grouping_ui.js";
+import { setupGroupingUI, loadExistingGroups } from "./grouping_ui.js"; // Ensure setupGroupingUI is imported
 import {
   setupStashUI,
   renderStashList,
@@ -17,48 +17,46 @@ import {
 import { debounce } from "./utils.js";
 
 // --- Debounced Render Functions ---
-const debouncedRenderTabs = debounce(renderTabs, 250);
-const debouncedRenderBookmarkTree = debounce(renderBookmarkTree, 300);
-const debouncedRenderStashList = debounce(renderStashList, 300);
-const debouncedLoadExistingGroups = debounce(loadExistingGroups, 300);
-
-// --- State ---
-let initialSetupComplete = false;
+// Debounce time can be adjusted based on performance needs
+const debouncedRenderTabs = debounce(renderTabs, 200);
+const debouncedRenderBookmarkTree = debounce(renderBookmarkTree, 250);
+const debouncedRenderStashList = debounce(renderStashList, 250);
+const debouncedLoadExistingGroups = debounce(loadExistingGroups, 250);
 
 // --- Core Setup and Render Logic ---
 
-async function performInitialSetup() {
-  if (initialSetupComplete) return;
-  console.log("Performing initial UI setup...");
+/**
+ * Performs the initial setup of all UI components.
+ * Attaches event listeners. Relies on internal checks
+ * within each setup function to prevent duplicate listeners
+ * if called multiple times.
+ */
+async function performSetup() {
+  console.log("Performing UI setup...");
   try {
-    // Setup UI sections (listeners, initial states)
-    setupActionTabs(); // Sets up settings tabs and collapse listener
-    setupListTabs(); // Sets up list tabs listener and loads active list tab
-    setupTabsUI(); // Sets up current tabs list listeners (select all etc.)
-    setupBookmarksUI(); // Sets up bookmark panel listeners
-    setupGroupingUI(); // Sets up group panel listeners (calls loadExistingGroups)
-    await setupStashUI(); // Sets up stash listeners and loads highlight state
-
-    initialSetupComplete = true;
-    console.log("Initial UI setup complete.");
+    // Setup functions should ideally check if they've run already
+    setupActionTabs();
+    setupListTabs();
+    setupTabsUI();
+    setupBookmarksUI(); // This function already has a check
+    setupGroupingUI(); // *** ADDED MISSING CALL ***
+    await setupStashUI(); // Ensure this also has checks if necessary
+    console.log("UI setup complete.");
   } catch (error) {
-    console.error("Error during initial UI setup:", error);
+    console.error("Error during UI setup:", error);
   }
 }
 
+/**
+ * Renders all dynamic lists (tabs, bookmarks, stash).
+ */
 async function renderAllLists() {
-  // Only render if setup is complete
-  if (!initialSetupComplete) {
-    console.warn(
-      "Attempted to render lists before initial setup was complete."
-    );
-    return;
-  }
   console.log("Rendering all lists...");
   const results = await Promise.allSettled([
     renderTabs(),
     renderBookmarkTree(),
     renderStashList(),
+    // loadExistingGroups(), // Load groups separately if needed, or as part of renderTabs
   ]);
   console.log("List rendering finished.");
   results.forEach((result, index) => {
@@ -68,6 +66,7 @@ async function renderAllLists() {
     }
   });
 
+  // Update highlighting after lists are rendered
   try {
     await updateHighlightingOnActiveTab();
     console.log("Highlighting updated after list render.");
@@ -77,48 +76,22 @@ async function renderAllLists() {
 }
 
 // --- Initial Load Trigger ---
-performInitialSetup().then(() => {
-  if (initialSetupComplete && document.readyState !== "loading") {
-    renderAllLists();
-  } else if (initialSetupComplete) {
-    document.addEventListener("DOMContentLoaded", renderAllLists, {
-      once: true,
-    });
-  }
-});
 
+// Use DOMContentLoaded to ensure the DOM is ready before setup and rendering
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("Sidebar DOM loaded event fired.");
-  if (!initialSetupComplete) {
-    console.log(
-      "Initial setup not complete, running setup and render via DOMContentLoaded."
-    );
-    await performInitialSetup();
-    if (initialSetupComplete) {
-      await renderAllLists();
-    }
-  } else {
-    // If setup is done, ensure lists render if DOM was ready before setup finished
-    await renderAllLists();
-  }
+  await performSetup(); // Setup UI elements and listeners
+  await renderAllLists(); // Perform the initial render of lists
 });
 
 // --- Render on Visibility Change ---
+// Re-render lists when the panel becomes visible again for fresh data
 document.addEventListener("visibilitychange", async () => {
   if (document.visibilityState === "visible") {
-    console.log("Sidebar became visible.");
-    if (!initialSetupComplete) {
-      console.warn(
-        "Sidebar visible but initial setup not complete. Attempting setup and render."
-      );
-      await performInitialSetup();
-      if (initialSetupComplete) {
-        await renderAllLists();
-      }
-    } else {
-      console.log("Re-rendering lists on visibility change.");
-      await renderAllLists();
-    }
+    console.log("Sidebar became visible. Re-rendering lists.");
+    await renderAllLists();
+    // Optionally, refresh group list if it can change while panel is hidden
+    await loadExistingGroups();
   }
 });
 
@@ -128,6 +101,7 @@ document.addEventListener("visibilitychange", async () => {
 chrome.tabs.onCreated.addListener(debouncedRenderTabs);
 chrome.tabs.onRemoved.addListener(debouncedRenderTabs);
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  // Re-render if relevant properties change
   if (
     changeInfo.url ||
     changeInfo.title ||
@@ -139,15 +113,14 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
-  if (initialSetupComplete) {
-    try {
-      await updateHighlightingOnActiveTab();
-    } catch (highlightError) {
-      console.error(
-        "Error updating highlighting on tab activation:",
-        highlightError
-      );
-    }
+  // Update highlighting when the active tab changes
+  try {
+    await updateHighlightingOnActiveTab();
+  } catch (highlightError) {
+    console.error(
+      "Error updating highlighting on tab activation:",
+      highlightError
+    );
   }
 });
 chrome.tabs.onAttached.addListener(debouncedRenderTabs);
@@ -155,6 +128,7 @@ chrome.tabs.onDetached.addListener(debouncedRenderTabs);
 
 // Group Events
 function handleGroupChange() {
+  // Re-render tabs list and reload group dropdown
   debouncedRenderTabs();
   debouncedLoadExistingGroups();
 }
@@ -172,22 +146,15 @@ chrome.bookmarks.onMoved.addListener(debouncedRenderBookmarkTree);
 // --- Message Listener for Background Script Updates ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "stashUpdated") {
-    console.log("Sidebar: Received stashUpdated message from background.");
-    // Find the active list tab button
-    const activeListTab = document.querySelector(".list-tab-btn.active");
-    // Re-render stash list only if "Stashed Items" tab is active
-    if (activeListTab && activeListTab.dataset.target === "stash-list-area") {
-      console.log(
-        "Sidebar: Stash list tab active, calling debouncedRenderStashList."
-      );
-      debouncedRenderStashList();
-    } else {
-      console.log(
-        "Sidebar: Stash list tab not active, list will refresh when selected."
-      );
-    }
-    return true; // Indicate potential async response
+    console.log(
+      "Sidebar: Received stashUpdated message. Re-rendering stash list."
+    );
+    // Re-render the stash list whenever the background indicates an update
+    debouncedRenderStashList();
+    // Indicate that the message was handled (even if async via debounce)
+    return true;
   }
+  // Return false or undefined if the message is not handled here
 });
 
-console.log("Sidebar script loaded (Modular).");
+console.log("Sidebar script loaded (Modular - Grouping Setup Fix).");

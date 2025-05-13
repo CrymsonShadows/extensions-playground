@@ -1,14 +1,27 @@
 /* stash_panel.css - Styles for the Stash action panel and list area */
 
-/* Button group for stash actions (within the settings tab panel) */
-.stash-actions {
+/* --- Settings Panel Styles --- */
+.stash-tags-input-container {
   margin-bottom: 10px;
   flex-shrink: 0;
 }
-
-/* Specific button styles (within the settings tab panel) */
+.stash-tags-input-container label {
+  display: block;
+  font-size: 0.85em;
+  margin-bottom: 3px;
+  color: #555;
+  font-weight: bold;
+}
+.stash-tags-input {
+  margin-bottom: 0;
+}
+.stash-actions,
+.stash-selected-actions {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
 .btn.stash-btn {
-  background-color: #7a6ff0; /* Purple */
+  background-color: #7a6ff0;
   color: white;
   border-color: #6155cc;
 }
@@ -16,9 +29,15 @@
   background-color: #6155cc;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
+.btn.stash-btn.delete-btn {
+  background-color: #d9534f;
+  border-color: #c9302c;
+}
+.btn.stash-btn.delete-btn:hover {
+  background-color: #c9302c;
+}
 .btn.consumed-btn {
-  background-color: #f0ad4e; /* Warning orange */
+  background-color: #f0ad4e;
   color: white;
   border-color: #ec971f;
 }
@@ -26,10 +45,18 @@
   background-color: #ec971f;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
-
-/* Styles for controls and list now apply within #stash-list-area */
-
-/* Container for filter/search/sort controls (within #stash-list-area) */
+.stash-controls-section {
+  padding: 0;
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+.stash-controls-section h4 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #333;
+  padding-left: 0;
+}
 .stash-controls {
   display: flex;
   flex-wrap: wrap;
@@ -38,8 +65,6 @@
   align-items: center;
   flex-shrink: 0;
 }
-
-/* Specific input/select sizing within controls */
 .stash-filter-select {
   min-width: 120px;
   flex-basis: 120px;
@@ -54,8 +79,6 @@
   flex-basis: 150px;
   flex-grow: 1;
 }
-
-/* Toggle button (within #stash-list-area controls) */
 .btn.toggle-btn {
   background-color: #f8f9fa;
   color: #495057;
@@ -80,40 +103,78 @@
   background-color: #b6d4fe;
   border-color: #8bb9fe;
 }
+.stash-import-export-section {
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+.stash-import-export-section h4 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 0.9em;
+  color: #333;
+}
+.btn.export-btn {
+  background-color: #0d6efd;
+  color: white;
+  border-color: #0a58ca;
+}
+.btn.export-btn:hover {
+  background-color: #0a58ca;
+}
+.btn.import-btn {
+  background-color: #198754;
+  color: white;
+  border-color: #146c43;
+}
+.btn.import-btn:hover {
+  background-color: #146c43;
+}
+#import-stash-input {
+  display: none;
+}
 
-/* Container for the list of stashed items (within #stash-list-area) */
+/* --- Stash List Panel Styles (#stash-list-area) --- */
 #stash-list {
   overflow-y: auto;
-  /* border: 1px solid #ccc; */ /* Border handled by parent */
   border-radius: 4px;
-  background-color: #fff; /* Keep white background */
+  background-color: #fff;
   flex-grow: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border: 1px solid #eee;
 }
-
-/* Individual stashed item */
 .stash-item {
   display: flex;
-  align-items: flex-start;
-  padding: 12px 15px;
+  align-items: flex-start; /* Align items to the top */
+  padding: 10px 5px 10px 10px; /* Adjust padding */
   border-bottom: 1px solid #eee;
-  gap: 10px;
+  gap: 8px; /* Adjust gap */
   flex-shrink: 0;
+  /* position: relative; */ /* REMOVED - No longer needed for remove button */
 }
 .stash-item:last-child {
   border-bottom: none;
 }
 
+/* Container for Status and Favorite Button (Left) */
+.stash-item-status-area {
+  display: flex;
+  flex-direction: column; /* Stack vertically */
+  align-items: center; /* Center horizontally */
+  gap: 5px; /* Space between status and favorite */
+  flex-shrink: 0;
+  width: 55px; /* Give it a fixed width */
+  padding-top: 2px; /* Align top with info text */
+}
+
 /* Status indicator */
 .stash-item-status {
-  flex-shrink: 0;
   font-size: 0.85em;
   padding: 3px 6px;
   border-radius: 3px;
   white-space: nowrap;
-  margin-top: 2px;
+  text-align: center;
 }
 .stash-item-status.consumed {
   background-color: #e6f4ea;
@@ -125,27 +186,28 @@
 }
 
 /* Consumed title style */
-.stash-item-status.consumed + .stash-item-info .stash-item-title {
+.stash-item-info .stash-item-title.consumed-title-style {
   text-decoration: line-through;
   opacity: 0.7;
 }
-.stash-item-status.consumed + .stash-item-info .stash-item-title:hover {
+.stash-item-info .stash-item-title.consumed-title-style:hover {
   text-decoration: line-through underline;
 }
 
-/* Info container */
+/* Info container (Center) */
 .stash-item-info {
-  flex-grow: 1;
+  flex-grow: 1; /* Take remaining space */
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* margin-right: 0; */ /* REMOVED - No longer needed */
 }
-
-/* Title */
 .stash-item-title {
   display: block;
   font-weight: bold;
-  white-space: normal; /* Allow wrapping */
+  white-space: normal;
   font-size: 1em;
-  margin-bottom: 4px;
   color: #333;
   text-decoration: none;
   word-break: break-word;
@@ -154,8 +216,6 @@
   text-decoration: underline;
   color: #1a73e8;
 }
-
-/* URL */
 .stash-item-url {
   display: block;
   font-size: 0.9em;
@@ -164,43 +224,92 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.stash-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.stash-tag {
+  background-color: #e0e0e0;
+  color: #555;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 0.75em;
+  white-space: nowrap;
+}
 
-/* Count indicator */
+/* Favorite Button Styles (within status-area) */
+.stash-item-favorite-btn {
+  background: none;
+  border: none;
+  color: #aaa; /* Default color for non-favorite */
+  font-size: 1.4em;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+  transition: color 0.2s ease, opacity 0.2s ease, transform 0.1s ease;
+  flex-shrink: 0;
+  margin-top: 0;
+}
+.stash-item-favorite-btn:hover {
+  opacity: 1;
+  color: #888; /* Slightly darker on hover when not favorited */
+}
+.stash-item-favorite-btn.favorited {
+  color: #f0ad4e; /* Gold color for favorited */
+  opacity: 1; /* Full opacity when favorited */
+  font-weight: bold; /* Make the star bolder */
+}
+.stash-item-favorite-btn.favorited:hover {
+  color: #ec971f; /* Slightly darker gold on hover when favorited */
+}
+.stash-item-favorite-btn:active {
+  transform: scale(0.9);
+}
+
+/* --- NEW: Container for Count and Remove Button (Right) --- */
+.stash-item-actions-container {
+  display: flex;
+  flex-direction: column; /* Stack vertically */
+  justify-content: space-around; /* Space out items vertically */
+  align-items: center; /* Center items horizontally */
+  flex-shrink: 0; /* Prevent shrinking */
+  min-height: 50px; /* Ensure enough height for spacing */
+  /* Add padding or margin if needed */
+  padding: 0 5px;
+}
+
+/* Stash Count (within actions-container) */
 .stash-item-count {
-  font-size: 0.9em;
-  font-weight: bold;
+  font-size: 0.85em; /* Slightly smaller */
+  font-weight: normal; /* Less emphasis */
   color: #555;
   background-color: #e0e0e0;
-  padding: 3px 7px;
+  padding: 2px 5px; /* Adjust padding */
   border-radius: 4px;
-  flex-shrink: 0;
-  margin-left: 6px;
-  margin-right: auto;
   white-space: nowrap;
-  margin-top: 1px;
+  /* Remove margin/align-self as flex handles alignment */
 }
 
-/* Date (Hidden) */
-.stash-item-date {
-  display: none;
-}
-
-/* Remove button */
+/* Remove button (within actions-container) */
 .stash-item-remove-btn {
   background: none;
   border: none;
   color: #dc3545;
-  font-size: 1.5em;
+  font-size: 1.4em; /* Adjust size if needed */
   font-weight: bold;
   cursor: pointer;
-  padding: 0 8px;
-  margin-left: 8px;
+  padding: 0 5px; /* Adjust padding */
   line-height: 1;
   opacity: 0.6;
   transition: opacity 0.2s ease, color 0.2s ease;
-  order: 5;
-  align-self: center;
-  flex-shrink: 0;
+  /* REMOVED absolute positioning */
+  /* position: absolute; */
+  /* right: 10px; */
+  /* top: 50%; */
+  /* transform: translateY(-50%); */
 }
 .stash-item-remove-btn:hover {
   opacity: 1;
@@ -210,4 +319,9 @@
   color: #ccc;
   cursor: default;
   opacity: 0.5;
+}
+
+/* Hidden date span */
+.stash-item-date {
+  display: none;
 }

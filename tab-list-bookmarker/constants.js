@@ -27,13 +27,16 @@ export const availableGroupColors = Object.keys(groupColorMap);
 
 // IndexedDB Constants
 export const DB_NAME = "TabStashDB";
-export const DB_VERSION = 3; // Ensure this matches background.js if modified there
+export const DB_VERSION = 6; // <<<<<<<<<<<< INCREMENTED VERSION
 export const STORE_NAME = "stashedTabs";
 export const URL_INDEX = "urlIndex";
-export const DATE_INDEX = "dateCreatedIndex";
+export const DATE_INDEX = "dateCreatedIndex"; // Original creation date
 export const CONSUMED_INDEX = "consumedIndex";
 export const TITLE_INDEX = "titleIndex";
 export const STASH_COUNT_INDEX = "stashCountIndex";
+export const TAGS_INDEX = "tagsIndex";
+export const FAVORITE_INDEX = "favoriteIndex";
+export const DATE_UPDATED_INDEX = "dateUpdatedIndex"; // <<<<<<<<<<<< NEW INDEX for last stashed/updated date
 
 // Storage Key for Checkbox State (if using storage method)
 // export const CHECKED_TABS_STORAGE_KEY = 'sidebarCheckedTabs';
