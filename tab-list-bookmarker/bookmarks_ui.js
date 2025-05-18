@@ -3,6 +3,7 @@ import { setStatusMessage } from "./utils.js";
 import { getSelectedTabData, clearSelectedTabs } from "./tabs_ui.js";
 import { stashOrUpdateItemDB } from "./db.js";
 import { renderStashList } from "./stash_ui.js";
+import { getOriginalTabInfo } from "./utils.js"; // Import getOriginalTabInfo
 
 // --- Element References ---
 const bookmarkSelectedBtn = document.getElementById("bookmark-selected-btn");
@@ -27,7 +28,6 @@ let isBookmarking = false;
 let isStashingBookmarks = false;
 
 // --- Bookmark Tree Rendering ---
-// buildBookmarkTreeLevel, renderBookmarkTree remain the same
 function buildBookmarkTreeLevel(nodes, parentElement) {
   nodes.forEach((node) => {
     if (!node.url) {
@@ -109,7 +109,6 @@ export async function renderBookmarkTree() {
 }
 
 // --- Bookmarking Actions (Selected Tabs) ---
-// createBookmarksInFolder, performBookmarkOperation remain the same
 async function createBookmarksInFolder(tabs, targetFolderId) {
   const successfullyBookmarkedTabs = [];
   let createdCount = 0;
@@ -304,23 +303,20 @@ async function performBookmarkOperation(shouldDeleteTabs = false) {
   }
 }
 
-// --- NEW: Recursive function to get all bookmarks in a subtree ---
+// --- Recursive function to get all bookmarks in a subtree ---
 async function getBookmarksRecursively(folderId) {
   const allBookmarks = [];
   try {
-    // Get the entire subtree starting from the folderId
     const subTreeNodes = await chrome.bookmarks.getSubTree(folderId);
     if (!subTreeNodes || subTreeNodes.length === 0) {
-      return []; // No subtree found
+      return [];
     }
 
-    // Recursive helper function to traverse the tree
     function findBookmarks(nodes) {
       if (!nodes) return;
       nodes.forEach((node) => {
-        // If it's a bookmark (has a URL), add it to the list
         if (node.url) {
-          // Basic validation
+          // Basic validation for javascript: URLs
           if (!node.url.startsWith("javascript:")) {
             allBookmarks.push(node);
           } else {
@@ -329,15 +325,11 @@ async function getBookmarksRecursively(folderId) {
             );
           }
         }
-        // If it's a folder (has children), recurse
         if (node.children) {
           findBookmarks(node.children);
         }
       });
     }
-
-    // Start traversal from the children of the root node of the subtree
-    // (We don't want to process the folder itself, just its contents)
     if (subTreeNodes[0] && subTreeNodes[0].children) {
       findBookmarks(subTreeNodes[0].children);
     }
@@ -346,8 +338,7 @@ async function getBookmarksRecursively(folderId) {
       `Error getting bookmark subtree for folder ${folderId}:`,
       error
     );
-    // Rethrow or handle as needed, maybe return empty array
-    throw error; // Propagate error to the caller
+    throw error;
   }
   return allBookmarks;
 }
@@ -381,13 +372,12 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
 
   let bookmarksToProcess = [];
   try {
-    // *** Use the recursive function ***
     setStatusMessage(
       statusMessageElement,
       `Fetching bookmarks from "${folderName}" (including subfolders)...`
     );
     bookmarksToProcess = await getBookmarksRecursively(folderId);
-    setStatusMessage(statusMessageElement, ""); // Clear fetching message
+    setStatusMessage(statusMessageElement, "");
   } catch (error) {
     console.error("Error getting recursive bookmarks:", error);
     setStatusMessage(statusMessageElement, "Error fetching bookmarks.", true);
@@ -402,7 +392,6 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
     return;
   }
 
-  // *** Update confirmation message ***
   if (shouldDeleteBookmarks) {
     if (
       !window.confirm(
@@ -428,30 +417,66 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
   let errorCount = 0;
   const successfullyStashedBookmarkIds = [];
 
-  // Stash each bookmark found recursively
   const stashPromises = bookmarksToProcess.map((bookmark) => {
-    // URL validation happened in getBookmarksRecursively
+    // *** MODIFICATION: Use getOriginalTabInfo to process URL and Title ***
+    const originalInfo = getOriginalTabInfo(bookmark.url, bookmark.title);
+    console.log(
+      `Stashing bookmark: Original URL: ${bookmark.url}, Processed URL: ${originalInfo.url}`
+    );
+
+    // Skip if, after processing, the URL is invalid (e.g. still a chrome-extension URL that couldn't be resolved)
+    // or if it's a type of URL we don't want to stash (like internal chrome pages).
+    // The getOriginalTabInfo function itself might return the original chrome-extension:// URL
+    // if it can't parse it or if it's not from a known suspender pattern.
+    // We should add a check here to prevent stashing unresolved or unwanted chrome-extension URLs.
+    if (
+      !originalInfo.url ||
+      originalInfo.url.startsWith("chrome://") ||
+      (originalInfo.url.startsWith("chrome-extension://") &&
+        !originalInfo.isSuspended) || // Allow if getOriginalTabInfo marked it as suspended (meaning it extracted a real URL)
+      originalInfo.url.startsWith("about:") ||
+      originalInfo.url.startsWith("file:")
+    ) {
+      console.warn(
+        `Skipping bookmark with invalid or non-storable processed URL: ${originalInfo.url} (Original: ${bookmark.url})`
+      );
+      return Promise.resolve({
+        status: "skipped",
+        reason: "Invalid processed URL",
+      });
+    }
+
     const bookmarkDateAdded = bookmark.dateAdded
       ? new Date(bookmark.dateAdded).toISOString()
       : new Date().toISOString();
+
     const itemData = {
-      title: bookmark.title || bookmark.url,
-      url: bookmark.url,
+      title: originalInfo.title || originalInfo.url, // Use processed title/URL
+      url: originalInfo.url, // Use processed URL
       tags: tagsArray,
       dateCreated: bookmarkDateAdded,
+      // dateUpdated will be set by stashOrUpdateItemDB
     };
     return stashOrUpdateItemDB(itemData).then((result) => ({
       ...result,
-      bookmarkId: bookmark.id,
+      bookmarkId: bookmark.id, // Keep original bookmark ID for potential deletion
     }));
   });
 
   const results = await Promise.allSettled(stashPromises);
 
   results.forEach((result) => {
-    if (result.status === "fulfilled" && result.value.action) {
-      successCount++;
-      successfullyStashedBookmarkIds.push(result.value.bookmarkId);
+    if (result.status === "fulfilled") {
+      if (result.value.action) {
+        // 'action' implies success from stashOrUpdateItemDB
+        successCount++;
+        if (result.value.bookmarkId) {
+          successfullyStashedBookmarkIds.push(result.value.bookmarkId);
+        }
+      } else if (result.value.status === "skipped") {
+        console.log("A bookmark was skipped:", result.value.reason);
+        // Not necessarily an error, but good to note. Could decrement total count if needed.
+      }
     } else if (result.status === "rejected") {
       errorCount++;
       console.error("Error stashing one of the bookmarks:", result.reason);
@@ -462,6 +487,10 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
   if (errorCount > 0) {
     finalMessage += ` Errors: ${errorCount}.`;
   }
+  const skippedCount = bookmarksToProcess.length - (successCount + errorCount);
+  if (skippedCount > 0) {
+    finalMessage += ` Skipped: ${skippedCount}.`;
+  }
   setStatusMessage(statusMessageElement, finalMessage, errorCount > 0);
 
   if (successCount > 0) {
@@ -469,7 +498,6 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
     await renderStashList();
   }
 
-  // Delete original bookmarks if requested and successful
   if (shouldDeleteBookmarks && successfullyStashedBookmarkIds.length > 0) {
     setStatusMessage(
       statusMessageElement,
@@ -479,33 +507,27 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
     let deleteSuccessCount = 0;
     let deleteErrorCount = 0;
 
-    // Important: Delete bookmarks one by one to avoid issues with nested deletion order
     for (const idToDelete of successfullyStashedBookmarkIds) {
       try {
         await chrome.bookmarks.remove(idToDelete);
         deleteSuccessCount++;
       } catch (err) {
-        // Check if error is because it was already deleted (e.g., part of a deleted subfolder)
         if (!err.message.toLowerCase().includes("no bookmark")) {
           console.error(`Error deleting bookmark ${idToDelete}:`, err);
           deleteErrorCount++;
         } else {
-          console.log(
-            `Bookmark ${idToDelete} likely already deleted (part of subfolder?).`
-          );
-          // Consider still counting this as a "success" in the message?
-          // For now, we just log it and don't increment deleteErrorCount.
+          console.log(`Bookmark ${idToDelete} likely already deleted.`);
         }
       }
     }
 
-    finalMessage = `${operationText} ${successCount} item(s). Deleted: ${deleteSuccessCount}.`;
+    let deleteMessage = `Deleted: ${deleteSuccessCount} original bookmark(s).`;
     if (deleteErrorCount > 0) {
-      finalMessage += ` Delete Errors: ${deleteErrorCount}.`;
+      deleteMessage += ` Delete Errors: ${deleteErrorCount}.`;
     }
     setStatusMessage(
       statusMessageElement,
-      finalMessage,
+      `${finalMessage} ${deleteMessage}`, // Append delete status to previous message
       errorCount > 0 || deleteErrorCount > 0
     );
 
@@ -513,7 +535,6 @@ async function handleStashBookmarksClick(shouldDeleteBookmarks = false) {
   }
 
   bookmarkStashTagsInput.value = "";
-
   isStashingBookmarks = false;
   stashFolderBtn.disabled = false;
   stashDeleteFolderBtn.disabled = false;
@@ -530,7 +551,6 @@ export function setupBookmarksUI() {
   }
   console.log("Attaching bookmark listeners.");
 
-  // Bookmark Tabs listeners
   bookmarkSelectedBtn.addEventListener("click", () =>
     performBookmarkOperation(false)
   );
@@ -543,7 +563,6 @@ export function setupBookmarksUI() {
     }
   });
 
-  // Stash Bookmarks listeners
   stashFolderBtn.addEventListener("click", () =>
     handleStashBookmarksClick(false)
   );
