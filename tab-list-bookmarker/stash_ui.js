@@ -546,10 +546,15 @@ function createSingleStashItemElement(item) {
   // Date Stashed (Hidden by CSS, used for sorting and tooltip)
   const dateSpan = document.createElement("span");
   dateSpan.className = "stash-item-date"; // Keep for potential CSS use
-  // Display the *last updated* date in the tooltip for clarity with new sorting
-  const displayDate = item.dateUpdated || item.dateCreated;
+  // Display the last updated date in the tooltip for clarity with new sorting
+  const displayDate = item.dateUpdated || item.dateCreated; // Fallback to dateCreated if dateUpdated is missing
   dateSpan.textContent = new Date(displayDate).toLocaleDateString();
-  dateSpan.title = `Last Stashed: ${new Date(displayDate).toLocaleString()}`;
+  dateSpan.title = `Last Updated: ${new Date(displayDate).toLocaleString()}`;
+  if (item.dateCreated && item.dateUpdated !== item.dateCreated) {
+    dateSpan.title += ` (Created: ${new Date(
+      item.dateCreated
+    ).toLocaleString()})`;
+  }
   dateSpan.style.display = "none";
   infoDiv.appendChild(dateSpan); // Append to infoDiv to associate with title/url
 
@@ -646,32 +651,42 @@ export async function renderStashList() {
 
     const sortValue = stashSortSelect.value;
     items.sort((a, b) => {
+      // Ensure dateUpdated and dateCreated are valid Date objects for comparison
+      // Provide a very old date as fallback if dates are missing/invalid to avoid NaN issues
+      const fallbackDate = new Date(0); // January 1, 1970
+      const dateAUpdated = new Date(a.dateUpdated || fallbackDate);
+      const dateBUpdated = new Date(b.dateUpdated || fallbackDate);
+      const dateACreated = new Date(a.dateCreated || fallbackDate);
+      const dateBCreated = new Date(b.dateCreated || fallbackDate);
+
       switch (sortValue) {
-        case "dateAsc": // Oldest (based on last update)
-          return (
-            new Date(a.dateUpdated || a.dateCreated) -
-            new Date(b.dateUpdated || b.dateCreated)
-          );
+        case "dateAsc": // Oldest (based on original creation date)
+          return dateACreated - dateBCreated;
+        case "dateDesc": // Newest (based on original creation date)
+          return dateBCreated - dateACreated;
+
+        // *** NEW SORTING CASES FOR DATE UPDATED ***
+        case "dateUpdatedAsc": // Oldest (based on last update)
+          return dateAUpdated - dateBUpdated;
+        case "dateUpdatedDesc": // Newest (based on last update) - DEFAULT
+        default: // Also make this the default if sortValue is unrecognized
+          return dateBUpdated - dateAUpdated;
+        // *** END NEW SORTING CASES ***
+
         case "titleAsc":
           return (a.title || "").localeCompare(b.title || "");
         case "titleDesc":
           return (b.title || "").localeCompare(a.title || "");
-        case "consumedTrue":
-          return a.consumed === b.consumed ? 0 : a.consumed ? -1 : 1;
-        case "consumedFalse":
-          return a.consumed === b.consumed ? 0 : a.consumed ? 1 : -1;
-        // *** ADDED CASES FOR STASH COUNT SORTING ***
+        case "consumedTrue": // Read first
+          if (a.consumed === b.consumed) return 0;
+          return a.consumed ? -1 : 1;
+        case "consumedFalse": // Unread first
+          if (a.consumed === b.consumed) return 0;
+          return a.consumed ? 1 : -1;
         case "stashCountDesc": // Most stashed
           return (b.stashCount || 0) - (a.stashCount || 0);
         case "stashCountAsc": // Least stashed
           return (a.stashCount || 0) - (b.stashCount || 0);
-        // *** END ADDED CASES ***
-        case "dateDesc": // Newest (based on last update) - DEFAULT
-        default:
-          return (
-            new Date(b.dateUpdated || b.dateCreated) -
-            new Date(a.dateUpdated || a.dateCreated)
-          );
       }
     });
 
