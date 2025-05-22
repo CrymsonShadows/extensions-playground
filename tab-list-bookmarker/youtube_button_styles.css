@@ -1,0 +1,123 @@
+/* youtube_button_styles.css */
+
+/* General styles for stash buttons */
+.yt-stash-button {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 2px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  transition: background-color 0.2s ease, opacity 0.2s ease; /* Added opacity transition */
+  z-index: 1000; /* Ensure it's on top */
+  opacity: 0.85; /* Slightly transparent by default */
+}
+
+.yt-stash-button:hover {
+  background-color: rgba(0, 0, 0, 0.95);
+  opacity: 1;
+}
+
+.yt-stash-button svg {
+  width: 18px;
+  height: 18px;
+  fill: white;
+  transition: fill 0.2s ease; /* For feedback */
+}
+
+.yt-stash-button-icon-only svg {
+  width: 20px; /* Slightly larger for icon-only */
+  height: 20px;
+}
+
+/* Thumbnail Overlay Button - MOVED TO LEFT */
+.yt-thumbnail-stash-button {
+  position: absolute;
+  top: 8px; /* Adjust as needed */
+  left: 8px; /* MOVED from right to left */
+  padding: 6px; /* Smaller padding for overlay */
+}
+
+/* Feedback style for stashed button */
+.yt-stash-button.stashed-feedback {
+  background-color: #28a745; /* Green for success */
+  opacity: 1;
+}
+.yt-stash-button.stashed-feedback svg {
+  fill: white; /* Keep icon white or change as needed */
+}
+
+/* Ensure thumbnail containers can host absolute positioned buttons */
+ytd-rich-item-renderer,
+  ytd-grid-video-renderer,
+  ytd-compact-video-renderer,
+  ytd-video-renderer, /* For search results and other list views */
+  ytd-playlist-panel-video-renderer, /* For playlist items */
+  ytm-compact-video-renderer, /* Mobile video items */
+  ytm-video-with-context-renderer /* Mobile video items */ {
+  position: relative !important; /* Important to override potential existing relative/static */
+}
+
+/* Video Watch Page Button (next to like/dislike) */
+.yt-video-page-stash-button-container {
+  margin-left: 8px; /* Space from the like/dislike buttons */
+  display: flex;
+  align-items: center;
+}
+
+.yt-video-page-stash-button {
+  background-color: rgba(
+    255,
+    255,
+    255,
+    0.1
+  ); /* YouTube's dark theme button background */
+  color: #fff; /* YouTube's dark theme icon color */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px; /* Pill shape like YouTube's buttons */
+  padding: 0 12px;
+  height: 36px; /* Match YouTube's button height */
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.yt-video-page-stash-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.yt-video-page-stash-button svg {
+  margin-right: 6px;
+  fill: #fff; /* Ensure icon color matches text */
+}
+
+/* --- Light Theme Adjustments for Video Page Button --- */
+html[dark="false"] .yt-video-page-stash-button,
+html:not([dark]) .yt-video-page-stash-button {
+  /* For when dark attribute is not present */
+  background-color: rgba(0, 0, 0, 0.05); /* Light theme button background */
+  color: #0f0f0f; /* Light theme text/icon color */
+  border: 1px solid transparent; /* Or match light theme border */
+}
+
+html[dark="false"] .yt-video-page-stash-button:hover,
+html:not([dark]) .yt-video-page-stash-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+html[dark="false"] .yt-video-page-stash-button svg,
+html:not([dark]) .yt-video-page-stash-button svg {
+  fill: #0f0f0f; /* Light theme icon color */
+}
+
+/* --- Mobile Specific Adjustments (if needed) --- */
+/* Example: ytm-slim-owner-video-renderer for video items on channel pages (mobile) */
+ytm-slim-owner-video-renderer {
+  position: relative !important;
+}
